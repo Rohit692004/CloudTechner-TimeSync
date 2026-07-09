@@ -159,8 +159,12 @@ export function EditEmployeeDialog({
                   id="password"
                   name="password"
                   type="password"
+                  minLength={8}
                   placeholder="Leave blank to keep current"
                 />
+                <p className="text-xs text-muted-foreground">
+                  If setting a new one: at least 8 characters, with letters and numbers.
+                </p>
               </div>
             </div>
 
