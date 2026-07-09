@@ -132,8 +132,18 @@ export function CreateEmployeeDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="password">Login Password</Label>
-              <Input id="password" name="password" type="password" placeholder="Default: password123" />
+              <Label htmlFor="password">Login Password *</Label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                required
+                minLength={8}
+                placeholder="Enter a password"
+              />
+              <p className="text-xs text-muted-foreground">
+                At least 8 characters, with letters and numbers.
+              </p>
             </div>
           </div>
 

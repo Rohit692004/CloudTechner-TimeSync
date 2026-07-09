@@ -11,6 +11,17 @@ function str(formData: FormData, key: string): string | null {
   return v === "" ? null : v;
 }
 
+const MIN_PASSWORD_LENGTH = 8;
+
+function validatePassword(password: string) {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
+  }
+  if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+    throw new Error("Password must contain at least one letter and one number.");
+  }
+}
+
 export async function createEmployee(formData: FormData) {
   await requireRole("HR_ADMIN");
 
@@ -42,7 +53,9 @@ export async function createEmployee(formData: FormData) {
   }
   const approverOverrideRaw = str(formData, "approverOverrideId");
   const approverOverrideId = approverOverrideRaw === "none" ? null : approverOverrideRaw;
-  const password = str(formData, "password") || "password123";
+  const password = str(formData, "password");
+  if (!password) throw new Error("Login password is required.");
+  validatePassword(password);
 
   // Hash password
   const passwordHash = await bcrypt.hash(password, 10);
@@ -112,6 +125,7 @@ export async function updateEmployee(id: string, formData: FormData) {
   };
 
   if (password && password.trim() !== "") {
+    validatePassword(password.trim());
     updateData.passwordHash = await bcrypt.hash(password.trim(), 10);
   }
 

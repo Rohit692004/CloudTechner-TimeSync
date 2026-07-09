@@ -155,14 +155,16 @@ export default async function LoginPage({
             Sign in with Google Workspace
           </Button>
 
-          <div className="mt-8 pt-6 border-t border-gray-100">
-            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Local Dev seed log-ins:</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              <strong>Password:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">password123</code><br />
-              <strong>HR Admin:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">bhavya@cloudtechner.com</code><br />
-              <strong>Employee:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">sachin@cloudtechner.com</code>
-            </p>
-          </div>
+          {process.env.NODE_ENV !== "production" && (
+            <div className="mt-8 pt-6 border-t border-gray-100">
+              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Local Dev seed log-ins:</h4>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                <strong>Password:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">password123</code><br />
+                <strong>HR Admin:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">bhavya@cloudtechner.com</code><br />
+                <strong>Employee:</strong> <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-600 font-mono">sachin@cloudtechner.com</code>
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
