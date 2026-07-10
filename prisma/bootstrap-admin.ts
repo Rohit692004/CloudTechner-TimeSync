@@ -67,6 +67,7 @@ async function main() {
   });
 
   console.log(`Created ${admin.role} account: ${admin.name} <${admin.email}> (id: ${admin.id})`);
+  console.log("Log in with this account, then use HR > Employees to onboard everyone else.");
 }
 
 main()

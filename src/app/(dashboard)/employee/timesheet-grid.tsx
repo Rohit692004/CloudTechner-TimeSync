@@ -24,7 +24,14 @@ import {
 import { WEEKDAY_LABELS } from "@/lib/dates";
 import { saveDraft, submitTimesheet } from "./actions";
 
-type Task = { id: string; name: string; projectName: string; clientName: string };
+type Task = {
+  id: string;
+  name: string;
+  projectName: string;
+  clientName: string;
+  allocationStartDate?: string;
+  allocationEndDate?: string | null;
+};
 
 export function TimesheetGrid({
   weekStartISO,
@@ -267,15 +274,20 @@ export function TimesheetGrid({
                     const todayStr = new Date().toLocaleDateString('sv-SE');
                     const isFutureDay = date > todayStr;
                     
-                    const isDisabled = !editable || !!leaveType || !!holidayName || isWeeklyOff || isFutureDay;
+                    const isNotAllocated = !!((task.allocationStartDate && date < task.allocationStartDate) ||
+                                           (task.allocationEndDate && date > task.allocationEndDate));
+
+                    const isDisabled = !editable || !!leaveType || !!holidayName || isWeeklyOff || isFutureDay || isNotAllocated;
 
                     return (
                       <TableCell 
                         key={date} 
                         className={`p-1 text-center border-r border-gray-100 last:border-0 relative ${
-                          leaveType 
-                            ? "bg-emerald-50/50" 
-                            : holidayName 
+                          leaveType
+                            ? "bg-emerald-50/50"
+                            : isNotAllocated
+                            ? "bg-gray-100/50"
+                            : holidayName
                             ? "bg-amber-50/50" 
                             : isWeeklyOff
                             ? "bg-slate-100/50"
@@ -286,6 +298,10 @@ export function TimesheetGrid({
                           {leaveType ? (
                             <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded shadow-sm select-none">
                               🌴 {leaveType} Leave
+                            </span>
+                          ) : isNotAllocated ? (
+                            <span className="text-[10px] font-bold text-gray-500 bg-gray-200/80 px-1.5 py-0.5 rounded shadow-sm select-none">
+                              🚫 Not Allocated
                             </span>
                           ) : holidayName ? (
                             <div className="flex flex-col gap-1 items-center">
