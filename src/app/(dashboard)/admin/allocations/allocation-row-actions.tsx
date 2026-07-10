@@ -9,15 +9,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteAllocation, endAllocationToday } from "./actions";
+import { EditAllocationDialog } from "./edit-allocation-dialog";
 
 export function AllocationRowActions({
   id,
   label,
   canEnd,
+  startDate,
+  endDate,
 }: {
   id: string;
   label: string;
   canEnd: boolean;
+  startDate: string;
+  endDate: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -42,6 +47,7 @@ export function AllocationRowActions({
 
   return (
     <div className="flex justify-end gap-2">
+      <EditAllocationDialog id={id} label={label} startDate={startDate} endDate={endDate} />
       {canEnd && (
         <Button size="sm" variant="outline" disabled={isPending} onClick={handleEnd}>
           End

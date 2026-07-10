@@ -166,6 +166,8 @@ export default async function AllocationsPage({
                       id={a.id}
                       label={`${a.employee.name} · ${a.project.name}`}
                       canEnd={a.status.label !== "Ended"}
+                      startDate={a.startDate.toISOString().slice(0, 10)}
+                      endDate={a.endDate ? a.endDate.toISOString().slice(0, 10) : null}
                     />
                   </TableCell>
                 </TableRow>
