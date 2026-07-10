@@ -21,12 +21,17 @@ export default async function EmployeesPage() {
         reportingManager: true,
         approverOverride: true,
         allocations: {
+          // Only count allocations on still-active projects toward an
+          // employee's total % and project badges -- a deactivated project
+          // shouldn't inflate their allocation (kept consistent with the
+          // admin dashboard and /admin/allocations utilization calcs).
           where: {
             startDate: { lte: today },
             OR: [
               { endDate: null },
               { endDate: { gte: today } }
-            ]
+            ],
+            project: { isActive: true }
           },
           include: {
             project: true
