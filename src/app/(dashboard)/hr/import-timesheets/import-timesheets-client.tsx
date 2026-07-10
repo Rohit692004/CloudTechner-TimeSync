@@ -266,7 +266,11 @@ export function ImportTimesheetsClient({
         );
         setHistory((prev) => [
           {
-            id: crypto.randomUUID(),
+            // Only used as a temporary React key until the next page load
+            // replaces this with the real DB row -- crypto.randomUUID() is
+            // unavailable over plain HTTP (non-secure-context), which this
+            // VM currently serves on, so avoid depending on it here.
+            id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`,
             fileName,
             importedByName: result.importedByName,
             importedAt: new Date().toISOString(),
