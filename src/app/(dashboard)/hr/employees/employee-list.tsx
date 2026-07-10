@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EditEmployeeDialog } from "./edit-employee-dialog";
+import { EmployeeHistoryDialog } from "./employee-history-dialog";
 import { ToggleActiveButton } from "@/components/toggle-active-button";
 import { toggleEmployeeActive } from "./actions";
 
@@ -181,6 +182,7 @@ export function EmployeeList({ initialEmployees, allActiveEmployees }: EmployeeL
                   </div>
                   {/* Actions buttons */}
                   <div className="flex items-center gap-1 shrink-0">
+                    <EmployeeHistoryDialog employeeId={emp.id} employeeName={emp.name} />
                     <EditEmployeeDialog employee={emp} managers={allActiveEmployees} />
                     <ToggleActiveButton id={emp.id} isActive={emp.isActive} action={toggleEmployeeActive} />
                   </div>

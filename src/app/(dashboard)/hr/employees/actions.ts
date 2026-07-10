@@ -95,6 +95,47 @@ export async function toggleEmployeeActive(id: string, isActive: boolean) {
   revalidatePath("/hr/employees");
 }
 
+export type ProjectHistoryEntry = {
+  id: string;
+  projectName: string;
+  clientName: string;
+  allocationPercentage: number;
+  startDate: string;
+  endDate: string | null;
+  status: "Upcoming" | "Active" | "Ended" | "Project Inactive";
+};
+
+export async function getEmployeeProjectHistory(employeeId: string): Promise<ProjectHistoryEntry[]> {
+  await requireRole("HR_ADMIN");
+
+  const allocations = await prisma.projectAllocation.findMany({
+    where: { employeeId },
+    include: { project: { include: { client: true } } },
+    orderBy: { startDate: "desc" },
+  });
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  return allocations.map((a) => {
+    let status: ProjectHistoryEntry["status"];
+    if (a.endDate && a.endDate <= today) status = "Ended";
+    else if (!a.project.isActive) status = "Project Inactive";
+    else if (a.startDate > today) status = "Upcoming";
+    else status = "Active";
+
+    return {
+      id: a.id,
+      projectName: a.project.name,
+      clientName: a.project.client.name,
+      allocationPercentage: a.allocationPercentage,
+      startDate: a.startDate.toISOString().slice(0, 10),
+      endDate: a.endDate ? a.endDate.toISOString().slice(0, 10) : null,
+      status,
+    };
+  });
+}
+
 export async function updateEmployee(id: string, formData: FormData) {
   await requireRole("HR_ADMIN");
 
