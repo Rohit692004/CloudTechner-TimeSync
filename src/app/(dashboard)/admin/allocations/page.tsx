@@ -16,9 +16,10 @@ import { AllocationRowActions } from "./allocation-row-actions";
 const SORT_KEYS = ["employee", "project", "percentage", "start", "end", "status"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
-function statusFor(startDate: Date, endDate: Date | null) {
+function statusFor(startDate: Date, endDate: Date | null, projectIsActive: boolean) {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
+  if (!projectIsActive) return { label: "Project Inactive", variant: "outline" as const, rank: 3 };
   if (startDate > today) return { label: "Upcoming", variant: "secondary" as const, rank: 1 };
   if (endDate && endDate <= today) return { label: "Ended", variant: "outline" as const, rank: 2 };
   return { label: "Active", variant: "default" as const, rank: 0 };
@@ -45,13 +46,16 @@ export default async function AllocationsPage({
   today.setUTCHours(0, 0, 0, 0);
   const utilization = new Map<string, number>();
   for (const a of allocations) {
-    const active = a.startDate <= today && (!a.endDate || a.endDate > today);
+    const active = a.startDate <= today && (!a.endDate || a.endDate > today) && a.project.isActive;
     if (active) {
       utilization.set(a.employeeId, (utilization.get(a.employeeId) ?? 0) + a.allocationPercentage);
     }
   }
 
-  const decorated = allocations.map((a) => ({ ...a, status: statusFor(a.startDate, a.endDate) }));
+  const decorated = allocations.map((a) => ({
+    ...a,
+    status: statusFor(a.startDate, a.endDate, a.project.isActive),
+  }));
   decorated.sort((a, b) => {
     let cmp = 0;
     switch (sortKey) {
