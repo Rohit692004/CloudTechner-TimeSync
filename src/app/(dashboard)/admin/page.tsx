@@ -76,7 +76,10 @@ export default async function AdminDashboard() {
     take: 5,
   });
 
-  // 5. Fetch overallocation data
+  // 5. Fetch overallocation data. Only allocations on active projects for
+  // active employees count toward utilization -- a deactivated project (or a
+  // former employee) shouldn't inflate anyone's total. Kept consistent with
+  // the utilization calc on /admin/allocations.
   const activeAllocations = await prisma.projectAllocation.findMany({
     where: {
       startDate: { lte: today },
@@ -84,6 +87,8 @@ export default async function AdminDashboard() {
         { endDate: null },
         { endDate: { gt: today } },
       ],
+      project: { isActive: true },
+      employee: { isActive: true },
     },
     include: {
       employee: true,
