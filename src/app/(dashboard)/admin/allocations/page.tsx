@@ -12,17 +12,22 @@ import {
 import { SortHeader } from "@/components/sort-header";
 import { CreateAllocationDialog } from "./create-allocation-dialog";
 import { AllocationRowActions } from "./allocation-row-actions";
+import { allocationStatusFor, type AllocationStatusLabel } from "@/lib/allocation";
 
 const SORT_KEYS = ["employee", "project", "percentage", "start", "end", "status"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 
-function statusFor(startDate: Date, endDate: Date | null, projectIsActive: boolean) {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
-  if (!projectIsActive) return { label: "Project Inactive", variant: "outline" as const, rank: 3 };
-  if (startDate > today) return { label: "Upcoming", variant: "secondary" as const, rank: 1 };
-  if (endDate && endDate <= today) return { label: "Ended", variant: "outline" as const, rank: 2 };
-  return { label: "Active", variant: "default" as const, rank: 0 };
+const STATUS_META: Record<AllocationStatusLabel, { variant: "default" | "secondary" | "outline"; rank: number }> = {
+  Active: { variant: "default", rank: 0 },
+  Upcoming: { variant: "secondary", rank: 1 },
+  Ended: { variant: "outline", rank: 2 },
+  "Project Inactive": { variant: "outline", rank: 3 },
+  "Employee Inactive": { variant: "outline", rank: 4 },
+};
+
+function statusFor(startDate: Date, endDate: Date | null, employeeIsActive: boolean, projectIsActive: boolean) {
+  const label = allocationStatusFor(startDate, endDate, employeeIsActive, projectIsActive);
+  return { label, ...STATUS_META[label] };
 }
 
 export default async function AllocationsPage({
@@ -46,7 +51,11 @@ export default async function AllocationsPage({
   today.setUTCHours(0, 0, 0, 0);
   const utilization = new Map<string, number>();
   for (const a of allocations) {
-    const active = a.startDate <= today && (!a.endDate || a.endDate > today) && a.project.isActive;
+    const active =
+      a.startDate <= today &&
+      (!a.endDate || a.endDate > today) &&
+      a.project.isActive &&
+      a.employee.isActive;
     if (active) {
       utilization.set(a.employeeId, (utilization.get(a.employeeId) ?? 0) + a.allocationPercentage);
     }
@@ -54,7 +63,7 @@ export default async function AllocationsPage({
 
   const decorated = allocations.map((a) => ({
     ...a,
-    status: statusFor(a.startDate, a.endDate, a.project.isActive),
+    status: statusFor(a.startDate, a.endDate, a.employee.isActive, a.project.isActive),
   }));
   decorated.sort((a, b) => {
     let cmp = 0;

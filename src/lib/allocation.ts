@@ -46,3 +46,24 @@ export async function getMaxOverlapPercentage(
 export function isValidAllocationPercentage(value: number) {
   return Number.isInteger(value) && value >= 5 && value <= 100 && value % 5 === 0;
 }
+
+export type AllocationStatusLabel = "Employee Inactive" | "Ended" | "Project Inactive" | "Upcoming" | "Active";
+
+// Shared status precedence for anywhere an allocation is displayed --
+// an explicit end date wins first (someone deliberately closed it out),
+// then whether the employee has since left the company, then whether the
+// project itself was deactivated, then the plain date-range check.
+export function allocationStatusFor(
+  startDate: Date,
+  endDate: Date | null,
+  employeeIsActive: boolean,
+  projectIsActive: boolean
+): AllocationStatusLabel {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (endDate && endDate <= today) return "Ended";
+  if (!employeeIsActive) return "Employee Inactive";
+  if (!projectIsActive) return "Project Inactive";
+  if (startDate > today) return "Upcoming";
+  return "Active";
+}

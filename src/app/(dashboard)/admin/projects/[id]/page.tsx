@@ -15,6 +15,9 @@ import { CreateTaskDialog } from "./create-task-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { EditTaskDialog } from "./edit-task-dialog";
 import { toggleTaskActive } from "./actions";
+import { allocationStatusFor } from "@/lib/allocation";
+
+const STALE_DAYS = 30;
 
 export default async function ProjectDetailPage({
   params,
@@ -22,7 +25,7 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  
+
   const [project, employees] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
@@ -39,6 +42,24 @@ export default async function ProjectDetailPage({
   ]);
 
   if (!project) notFound();
+
+  // Most recent workDate logged against this project, per employee -- lets
+  // the "Allocated employees" table flag allocations nobody's actually
+  // logging hours against anymore (a common sign someone moved on and the
+  // allocation was never formally ended).
+  const lines = await prisma.timesheetLine.findMany({
+    where: { task: { projectId: project.id } },
+    select: { workDate: true, timesheetHeader: { select: { employeeId: true } } },
+    orderBy: { workDate: "desc" },
+  });
+  const lastLoggedByEmployee = new Map<string, Date>();
+  for (const line of lines) {
+    const empId = line.timesheetHeader.employeeId;
+    if (!lastLoggedByEmployee.has(empId)) lastLoggedByEmployee.set(empId, line.workDate);
+  }
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const staleCutoff = new Date(today.getTime() - STALE_DAYS * 24 * 60 * 60 * 1000);
 
   const projectInput = {
     ...project,
@@ -134,20 +155,37 @@ export default async function ProjectDetailPage({
                 <TableHead>Allocation</TableHead>
                 <TableHead>Start</TableHead>
                 <TableHead>End</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last logged</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {project.allocations.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell>{a.employee.name}</TableCell>
-                  <TableCell>{a.allocationPercentage}%</TableCell>
-                  <TableCell>{a.startDate.toISOString().slice(0, 10)}</TableCell>
-                  <TableCell>{a.endDate ? a.endDate.toISOString().slice(0, 10) : "Open"}</TableCell>
-                </TableRow>
-              ))}
+              {project.allocations.map((a) => {
+                const status = allocationStatusFor(a.startDate, a.endDate, a.employee.isActive, project.isActive);
+                const lastLogged = lastLoggedByEmployee.get(a.employeeId) ?? null;
+                const isOpenEnded = status === "Active";
+                const isStale = isOpenEnded && (!lastLogged || lastLogged < staleCutoff);
+                return (
+                  <TableRow key={a.id}>
+                    <TableCell>{a.employee.name}</TableCell>
+                    <TableCell>{a.allocationPercentage}%</TableCell>
+                    <TableCell>{a.startDate.toISOString().slice(0, 10)}</TableCell>
+                    <TableCell>{a.endDate ? a.endDate.toISOString().slice(0, 10) : "Open"}</TableCell>
+                    <TableCell>
+                      <Badge variant={status === "Active" ? "default" : "secondary"}>{status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className={isStale ? "text-amber-700 font-medium" : "text-muted-foreground"}>
+                        {lastLogged ? lastLogged.toISOString().slice(0, 10) : "Never"}
+                        {isStale && ` — no entries in ${STALE_DAYS}+ days, may have moved on`}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {project.allocations.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
                     No allocations yet. Manage these from the Allocations tab.
                   </TableCell>
                 </TableRow>
