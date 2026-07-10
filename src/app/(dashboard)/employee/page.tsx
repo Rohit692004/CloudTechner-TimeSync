@@ -79,10 +79,25 @@ export default async function EmployeeDashboard({
     },
   });
 
-  const taskMap = new Map<string, { id: string; name: string; projectName: string }>();
+  const taskMap = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      projectName: string;
+      allocationStartDate: string;
+      allocationEndDate: string | null;
+    }
+  >();
   for (const a of allocations) {
     for (const t of a.project.tasks) {
-      taskMap.set(t.id, { id: t.id, name: t.name, projectName: a.project.name });
+      taskMap.set(t.id, {
+        id: t.id,
+        name: t.name,
+        projectName: a.project.name,
+        allocationStartDate: toISODate(a.startDate),
+        allocationEndDate: a.endDate ? toISODate(a.endDate) : null,
+      });
     }
   }
   const tasks = Array.from(taskMap.values()).sort((a, b) =>

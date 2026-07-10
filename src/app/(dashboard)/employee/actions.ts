@@ -28,11 +28,40 @@ async function upsertTimesheet(
   const weekStartDate = mondayOf(new Date(`${weekStartISO}T00:00:00.000Z`));
   const lines = parseLines(formData);
 
-  // Validate future dates
+  // Fetch active project allocations for the employee in the relevant timeframe
+  const allocations = await prisma.projectAllocation.findMany({
+    where: {
+      employeeId,
+      startDate: { lte: addDays(weekStartDate, 6) },
+      OR: [{ endDate: null }, { endDate: { gte: weekStartDate } }],
+    },
+    include: {
+      project: {
+        include: {
+          tasks: true,
+        },
+      },
+    },
+  });
+
+  // Validate future dates & project allocations
   const todayStr = toISODate(new Date());
   for (const line of lines) {
     if (line.workDate > todayStr) {
       throw new Error(`You cannot log hours for future dates (attempted to log for ${line.workDate}).`);
+    }
+
+    const alloc = allocations.find((a) =>
+      a.project.tasks.some((t) => t.id === line.taskId)
+    );
+    if (!alloc) {
+      throw new Error(`No active project allocation found for the task.`);
+    }
+
+    const startISO = toISODate(alloc.startDate);
+    const endISO = alloc.endDate ? toISODate(alloc.endDate) : null;
+    if (line.workDate < startISO || (endISO && line.workDate > endISO)) {
+      throw new Error(`You cannot log hours for this task outside your project allocation period (${startISO} to ${endISO || "open-ended"}).`);
     }
   }
 
