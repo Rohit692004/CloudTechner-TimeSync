@@ -157,11 +157,31 @@ export default async function EmployeeDashboard({
   const capacityHours = Math.max(workingDays * 8, 8);
   const utilization = Math.round((approvedMTD / capacityHours) * 100);
 
+  // Working days of the current timesheet week (Mon to Fri)
+  const workingDaysOfWeek: Date[] = [];
+  for (let i = 0; i < 5; i++) {
+    workingDaysOfWeek.push(addDays(weekStart, i));
+  }
+
   const allocDetails = allocations.map((a) => {
-    const hours = Math.round((a.allocationPercentage / 100) * 40);
+    let activeWorkingDays = 0;
+    const startVal = new Date(a.startDate).getTime();
+    const endVal = a.endDate ? new Date(a.endDate).getTime() : null;
+
+    for (const wd of workingDaysOfWeek) {
+      const t = wd.getTime();
+      const isActive = t >= startVal && (endVal === null || t <= endVal);
+      if (isActive) {
+        activeWorkingDays++;
+      }
+    }
+
+    const percentage = Math.round((activeWorkingDays / 5) * a.allocationPercentage);
+    const hours = Math.round((activeWorkingDays / 5) * (a.allocationPercentage / 100) * 40);
+
     return {
       projectName: a.project.name,
-      percentage: a.allocationPercentage,
+      percentage,
       hours,
     };
   });
