@@ -1,0 +1,300 @@
+// Core schema for the in-house timesheet app.
+// Cross-row business rules (100% allocation cap, self-approval block, 8hr minimum)
+// are enforced in the API layer, not as DB triggers/check constraints -- kept
+// simple for the short-timeline local build. See PROJECT_PLAN.md §3 for the
+// original DB-trigger design if that hardening gets picked up later.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmployeeRole {
+  EMPLOYEE
+  PROJECT_MANAGER
+  HR_ADMIN
+  TS_ADMIN
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum ProjectStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+}
+
+enum BillingModel {
+  TIME_AND_MATERIAL
+  FIXED_FEE
+  RETAINER
+  NON_BILLABLE
+}
+
+model Employee {
+  id                 String   @id // = Keka Employee ID, no regeneration
+  name               String
+  email              String   @unique
+  phone              String?
+  passwordHash       String
+  role               EmployeeRole @default(EMPLOYEE)
+  title              String?
+
+  reportingManagerId String?
+  reportingManager   Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id])
+  reports            Employee[] @relation("ReportingManager")
+
+  approverOverrideId String?
+  approverOverride   Employee?  @relation("ApproverOverride", fields: [approverOverrideId], references: [id])
+  overrideFor        Employee[] @relation("ApproverOverride")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  allocations        ProjectAllocation[] @relation("EmployeeAllocations")
+  createdAllocations ProjectAllocation[] @relation("AllocationCreatedBy")
+  timesheets         TimesheetHeader[]   @relation("EmployeeTimesheets")
+  approvals          TimesheetHeader[]   @relation("ApprovedBy")
+  approvalActions    ApprovalHistory[]
+  managedClients     Client[]            @relation("ClientManager")
+  managedProjects    Project[]           @relation("ProjectManager")
+  leaves             Leave[]             @relation("EmployeeLeaves")
+  leaveBalance       LeaveBalance?       @relation("EmployeeLeaveBalance")
+  holidayPlanId      String?
+  holidayPlan        HolidayPlan?        @relation("EmployeeHolidayPlan", fields: [holidayPlanId], references: [id])
+  importRuns         ImportRun[]
+}
+
+model Client {
+  id              String    @id @default(uuid())
+  name            String
+  code            String?   @unique // e.g. C025
+  country         String?
+  billingCurrency String?   // e.g. INR, USD
+  clientManagerId String?
+  clientManager   Employee? @relation("ClientManager", fields: [clientManagerId], references: [id])
+  description     String?
+
+  // Billing details
+  billingName     String?
+  addressLine1    String?
+  addressLine2    String?
+  billingCountry  String?
+  state           String?
+  city            String?
+  zip             String?
+
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+model Project {
+  id               String        @id @default(uuid())
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  name             String
+  code             String?       @unique // e.g. P0060
+  status           ProjectStatus @default(IN_PROGRESS)
+  projectManagerId String?
+  projectManager   Employee?     @relation("ProjectManager", fields: [projectManagerId], references: [id])
+  description      String?
+
+  // Duration & budget
+  startDate   DateTime? @db.Date
+  endDate     DateTime? @db.Date
+  costBudget  Decimal?  @db.Decimal(12, 2)
+  hoursBudget Decimal?  @db.Decimal(10, 2)
+
+  // Billing & expenses
+  billingModel BillingModel @default(TIME_AND_MATERIAL)
+  linkExpenses Boolean      @default(false)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tasks       Task[]
+  allocations ProjectAllocation[]
+}
+
+model Task {
+  id                String    @id @default(uuid())
+  projectId         String
+  project           Project   @relation(fields: [projectId], references: [id])
+  name              String
+  isDefaultTemplate Boolean   @default(false)
+  isActive          Boolean   @default(true)
+  startDate         DateTime? @db.Date
+  endDate           DateTime? @db.Date
+
+  lines TimesheetLine[]
+}
+
+model ProjectAllocation {
+  id                   String    @id @default(uuid())
+  projectId            String
+  project              Project   @relation(fields: [projectId], references: [id])
+  employeeId           String
+  employee             Employee  @relation("EmployeeAllocations", fields: [employeeId], references: [id])
+  allocationPercentage Int // 5-100, in 5% steps -- validated in API layer
+  startDate            DateTime  @db.Date
+  endDate              DateTime? @db.Date // null = open-ended
+  createdById          String?
+  createdBy            Employee? @relation("AllocationCreatedBy", fields: [createdById], references: [id])
+  createdAt            DateTime  @default(now())
+
+  // Prevents exact-duplicate rows (same employee+project+start). Staggered
+  // allocation still works: same employee+project with a *different* start date.
+  @@unique([employeeId, projectId, startDate])
+  @@index([employeeId, startDate, endDate])
+}
+
+model TimesheetHeader {
+  id                String          @id @default(uuid())
+  employeeId        String
+  employee          Employee        @relation("EmployeeTimesheets", fields: [employeeId], references: [id])
+  weekStartDate     DateTime        @db.Date // always a Monday
+  status            TimesheetStatus @default(DRAFT)
+  approvedById      String? // resolved approver, set at submit time; must != employeeId (API-enforced)
+  approvedBy        Employee?       @relation("ApprovedBy", fields: [approvedById], references: [id])
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  rejectionComments String?
+  totalHours        Decimal?        @db.Decimal(5, 2)
+  isLate            Boolean         @default(false)
+  lateApproved      Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  lines           TimesheetLine[]
+  approvalHistory ApprovalHistory[]
+
+  @@unique([employeeId, weekStartDate])
+}
+
+model TimesheetLine {
+  id                String          @id @default(uuid())
+  timesheetHeaderId String
+  timesheetHeader   TimesheetHeader @relation(fields: [timesheetHeaderId], references: [id], onDelete: Cascade)
+  taskId            String
+  task              Task            @relation(fields: [taskId], references: [id])
+  workDate          DateTime        @db.Date
+  hours             Decimal         @db.Decimal(4, 2)
+  notes             String?
+
+  @@unique([timesheetHeaderId, taskId, workDate])
+  @@index([timesheetHeaderId])
+}
+
+model ApprovalHistory {
+  id                String          @id @default(uuid())
+  timesheetHeaderId String
+  timesheetHeader   TimesheetHeader @relation(fields: [timesheetHeaderId], references: [id])
+  actorId           String
+  actor             Employee        @relation(fields: [actorId], references: [id])
+  action            String // SUBMITTED | APPROVED | REJECTED | RESUBMITTED
+  comments          String?
+  createdAt         DateTime        @default(now())
+}
+
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Leave {
+  id         String      @id @default(uuid())
+  employeeId String
+  employee   Employee    @relation("EmployeeLeaves", fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType  LeaveType   @default(CASUAL)
+  startDate  DateTime    @db.Date
+  endDate    DateTime    @db.Date
+  status     LeaveStatus @default(PENDING)
+  reason     String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([employeeId])
+}
+
+model LeaveBalance {
+  id         String   @id @default(uuid())
+  employeeId String   @unique
+  employee   Employee @relation("EmployeeLeaveBalance", fields: [employeeId], references: [id], onDelete: Cascade)
+  casual     Int      @default(12)
+  sick       Int      @default(12)
+  earned     Int      @default(15)
+}
+
+model HolidayPlan {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  holidays  Holiday[]
+  employees Employee[] @relation("EmployeeHolidayPlan")
+}
+
+model Holiday {
+  id             String   @id @default(uuid())
+  name           String
+  date           DateTime @db.Date
+  isFloaterLeave Boolean  @default(false)
+  specialHoliday Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  holidayPlanId  String
+  holidayPlan    HolidayPlan @relation(fields: [holidayPlanId], references: [id], onDelete: Cascade)
+}
+
+// One row per bulk timesheet import run (see hr/import-timesheets), so admins can
+// see what was imported before, by whom, and re-download that run's results report.
+model ImportRun {
+  id           String   @id @default(uuid())
+  fileName     String
+  importedById String
+  importedBy   Employee @relation(fields: [importedById], references: [id])
+  importedAt   DateTime @default(now())
+
+  totalDataRows        Int
+  usableRows           Int
+  weeksNew             Int
+  weeksAlreadyImported Int
+  newTasks             Int
+  newAllocations       Int
+  linesNew             Int
+  headersCreated       Int
+  linesCreated         Int
+
+  unknownEmployeesCount   Int
+  unknownProjectsCount    Int
+  clientMismatchesCount   Int
+  unresolvedManagersCount Int
+  timeOffRowsSkipped      Int
+  mixedStatusWeeksCount   Int
+
+  // Full ImportPreviewReport, JSON-stringified -- lets the results report be
+  // regenerated/downloaded later without modeling every flagged-row detail
+  // relationally.
+  reportDetailsJson String
+}

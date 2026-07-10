@@ -1,0 +1,173 @@
+import { prisma } from "@/lib/prisma";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { SortHeader } from "@/components/sort-header";
+import { CreateAllocationDialog } from "./create-allocation-dialog";
+import { AllocationRowActions } from "./allocation-row-actions";
+
+const SORT_KEYS = ["employee", "project", "percentage", "start", "end", "status"] as const;
+type SortKey = (typeof SORT_KEYS)[number];
+
+function statusFor(startDate: Date, endDate: Date | null) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (startDate > today) return { label: "Upcoming", variant: "secondary" as const, rank: 1 };
+  if (endDate && endDate <= today) return { label: "Ended", variant: "outline" as const, rank: 2 };
+  return { label: "Active", variant: "default" as const, rank: 0 };
+}
+
+export default async function AllocationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string; dir?: string }>;
+}) {
+  const { sort, dir } = await searchParams;
+  const sortKey: SortKey = SORT_KEYS.includes(sort as SortKey) ? (sort as SortKey) : "employee";
+  const sortDir: "asc" | "desc" = dir === "desc" ? "desc" : "asc";
+
+  const [allocations, employees, projects] = await Promise.all([
+    prisma.projectAllocation.findMany({
+      include: { employee: true, project: true },
+    }),
+    prisma.employee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.project.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+  ]);
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const utilization = new Map<string, number>();
+  for (const a of allocations) {
+    const active = a.startDate <= today && (!a.endDate || a.endDate > today);
+    if (active) {
+      utilization.set(a.employeeId, (utilization.get(a.employeeId) ?? 0) + a.allocationPercentage);
+    }
+  }
+
+  const decorated = allocations.map((a) => ({ ...a, status: statusFor(a.startDate, a.endDate) }));
+  decorated.sort((a, b) => {
+    let cmp = 0;
+    switch (sortKey) {
+      case "employee":
+        cmp = a.employee.name.localeCompare(b.employee.name);
+        break;
+      case "project":
+        cmp = a.project.name.localeCompare(b.project.name);
+        break;
+      case "percentage":
+        cmp = a.allocationPercentage - b.allocationPercentage;
+        break;
+      case "start":
+        cmp = a.startDate.getTime() - b.startDate.getTime();
+        break;
+      case "end":
+        cmp = (a.endDate?.getTime() ?? Infinity) - (b.endDate?.getTime() ?? Infinity);
+        break;
+      case "status":
+        cmp = a.status.rank - b.status.rank;
+        break;
+    }
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const base = "/admin/allocations";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Current utilization</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-3">
+            {employees.map((e) => {
+              const pct = utilization.get(e.id) ?? 0;
+              return (
+                <div
+                  key={e.id}
+                  className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+                >
+                  <span>{e.name}</span>
+                  <Badge variant={pct > 100 ? "destructive" : pct === 100 ? "default" : "secondary"}>
+                    {pct}%
+                  </Badge>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Allocations</CardTitle>
+          <CreateAllocationDialog employees={employees} projects={projects} />
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>
+                  <SortHeader label="Employee" sortKey="employee" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="Project" sortKey="project" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="%" sortKey="percentage" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="Start" sortKey="start" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="End" sortKey="end" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="Status" sortKey="status" currentSort={sortKey} currentDir={sortDir} basePath={base} />
+                </TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {decorated.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">{a.employee.name}</TableCell>
+                  <TableCell>{a.project.name}</TableCell>
+                  <TableCell>{a.allocationPercentage}%</TableCell>
+                  <TableCell>{a.startDate.toISOString().slice(0, 10)}</TableCell>
+                  <TableCell>
+                    {a.endDate ? a.endDate.toISOString().slice(0, 10) : "Open"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={a.status.variant}>{a.status.label}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <AllocationRowActions
+                      id={a.id}
+                      label={`${a.employee.name} · ${a.project.name}`}
+                      canEnd={a.status.label !== "Ended"}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {decorated.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    No allocations yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

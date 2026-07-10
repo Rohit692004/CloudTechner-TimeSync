@@ -1,0 +1,9 @@
+=== IMPORT REPORT ===
+Total entries: 93
+Employees referenced: CT061
+Projects referenced: P0048
+Distinct tasks to create: 1
+Total weeks (TimesheetHeader rows): 20
+
+Generating SQL to stdout...
+
