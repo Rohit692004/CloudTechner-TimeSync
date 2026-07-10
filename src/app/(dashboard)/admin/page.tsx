@@ -4,9 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { mondayOf, toISODate, addDays } from "@/lib/dates";
+import { sweepStaleAllocationsSafe } from "@/lib/stale-allocations";
 
 export default async function AdminDashboard() {
   const user = await requireRole("TS_ADMIN");
+
+  // Close out stale allocations before computing utilization / overallocation.
+  await sweepStaleAllocationsSafe();
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

@@ -49,6 +49,56 @@ export function isValidAllocationPercentage(value: number) {
 
 export type AllocationStatusLabel = "Employee Inactive" | "Ended" | "Project Inactive" | "Upcoming" | "Active";
 
+// How many days without a timesheet entry before an open-ended allocation is
+// considered stale and eligible to be swept closed (see endStaleAllocations).
+export const STALE_ALLOCATION_DAYS = 30;
+
+export function todayUTC(): Date {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+export function staleAllocationCutoff(today: Date = todayUTC()): Date {
+  return new Date(today.getTime() - STALE_ALLOCATION_DAYS * DAY_MS);
+}
+
+// An open-ended allocation is "stale" when it has been in effect for at least
+// STALE_ALLOCATION_DAYS *and* the employee has logged no time on that project
+// in the last STALE_ALLOCATION_DAYS -- a strong signal they quietly moved on
+// and the allocation was never formally ended.
+//
+// The "in effect for at least STALE_ALLOCATION_DAYS" guard (startDate <= cutoff)
+// is what protects a new joiner: someone whose allocation only just started
+// hasn't had a full window to log anything yet, so they're never stale.
+// An allocation with an explicit end date is never "stale" -- it's just Ended.
+export function isAllocationStale(
+  startDate: Date,
+  endDate: Date | null,
+  hasRecentActivity: boolean,
+  today: Date = todayUTC()
+): boolean {
+  if (endDate) return false;
+  const cutoff = staleAllocationCutoff(today);
+  if (startDate > cutoff) return false; // too new to judge (new-joiner guard)
+  return !hasRecentActivity;
+}
+
+// (employeeId|projectId) pairs that have at least one timesheet entry on or
+// after `sinceDate`. Used to decide staleness without an N+1 query per row.
+export async function getRecentActivityKeys(sinceDate: Date): Promise<Set<string>> {
+  const lines = await prisma.timesheetLine.findMany({
+    where: { workDate: { gte: sinceDate } },
+    select: {
+      timesheetHeader: { select: { employeeId: true } },
+      task: { select: { projectId: true } },
+    },
+  });
+  const keys = new Set<string>();
+  for (const l of lines) keys.add(`${l.timesheetHeader.employeeId}|${l.task.projectId}`);
+  return keys;
+}
+
 // Shared status precedence for anywhere an allocation is displayed --
 // an explicit end date wins first (someone deliberately closed it out),
 // then whether the employee has since left the company, then whether the
@@ -59,8 +109,7 @@ export function allocationStatusFor(
   employeeIsActive: boolean,
   projectIsActive: boolean
 ): AllocationStatusLabel {
-  const today = new Date();
-  today.setUTCHours(0, 0, 0, 0);
+  const today = todayUTC();
   if (endDate && endDate <= today) return "Ended";
   if (!employeeIsActive) return "Employee Inactive";
   if (!projectIsActive) return "Project Inactive";
