@@ -28,12 +28,16 @@ async function upsertTimesheet(
   const weekStartDate = mondayOf(new Date(`${weekStartISO}T00:00:00.000Z`));
   const lines = parseLines(formData);
 
-  // Fetch active project allocations for the employee in the relevant timeframe
+  // Fetch active project allocations for the employee in the relevant timeframe.
+  // project.isActive is enforced here too (not just when building the grid in
+  // employee/page.tsx) so a deactivated project's tasks are rejected server-side,
+  // not just hidden from the UI.
   const allocations = await prisma.projectAllocation.findMany({
     where: {
       employeeId,
       startDate: { lte: addDays(weekStartDate, 6) },
       OR: [{ endDate: null }, { endDate: { gte: weekStartDate } }],
+      project: { isActive: true },
     },
     include: {
       project: {
