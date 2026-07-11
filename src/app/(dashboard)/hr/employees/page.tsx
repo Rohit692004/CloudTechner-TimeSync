@@ -5,14 +5,10 @@ import { CreateEmployeeDialog } from "./create-employee-dialog";
 import { requireRole } from "@/lib/auth-guards";
 import { mondayOf } from "@/lib/dates";
 import { EmployeeList } from "./employee-list";
-import { sweepStaleAllocationsSafe } from "@/lib/stale-allocations";
 
 export default async function EmployeesPage() {
   // Protect page for HR_ADMIN only
   await requireRole("HR_ADMIN");
-
-  // Close out stale allocations before computing each employee's allocation %.
-  await sweepStaleAllocationsSafe();
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

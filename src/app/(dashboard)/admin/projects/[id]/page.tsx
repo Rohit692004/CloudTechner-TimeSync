@@ -16,7 +16,6 @@ import { EditProjectDialog } from "./edit-project-dialog";
 import { EditTaskDialog } from "./edit-task-dialog";
 import { toggleTaskActive } from "./actions";
 import { allocationStatusFor } from "@/lib/allocation";
-import { sweepStaleAllocationsSafe } from "@/lib/stale-allocations";
 
 const STALE_DAYS = 30;
 
@@ -26,9 +25,6 @@ export default async function ProjectDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
-  // Close out stale allocations before reading this project's roster.
-  await sweepStaleAllocationsSafe();
 
   const [project, employees] = await Promise.all([
     prisma.project.findUnique({

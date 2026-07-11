@@ -13,7 +13,6 @@ import { SortHeader } from "@/components/sort-header";
 import { CreateAllocationDialog } from "./create-allocation-dialog";
 import { AllocationRowActions } from "./allocation-row-actions";
 import { allocationStatusFor, type AllocationStatusLabel } from "@/lib/allocation";
-import { sweepStaleAllocationsSafe } from "@/lib/stale-allocations";
 
 const SORT_KEYS = ["employee", "project", "percentage", "start", "end", "status"] as const;
 type SortKey = (typeof SORT_KEYS)[number];
@@ -39,10 +38,6 @@ export default async function AllocationsPage({
   const { sort, dir } = await searchParams;
   const sortKey: SortKey = SORT_KEYS.includes(sort as SortKey) ? (sort as SortKey) : "employee";
   const sortDir: "asc" | "desc" = dir === "desc" ? "desc" : "asc";
-
-  // Close out any allocations that have gone stale before reading the data below,
-  // so status and utilization here reflect the cleanup immediately.
-  await sweepStaleAllocationsSafe();
 
   const [allocations, employees, projects] = await Promise.all([
     prisma.projectAllocation.findMany({

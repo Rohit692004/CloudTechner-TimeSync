@@ -86,9 +86,14 @@ export function isAllocationStale(
 
 // (employeeId|projectId) pairs that have at least one timesheet entry on or
 // after `sinceDate`. Used to decide staleness without an N+1 query per row.
-export async function getRecentActivityKeys(sinceDate: Date): Promise<Set<string>> {
+// Pass `employeeId` to scope the query to one employee (cheaper) when the
+// caller only cares about that person's allocations.
+export async function getRecentActivityKeys(sinceDate: Date, employeeId?: string): Promise<Set<string>> {
   const lines = await prisma.timesheetLine.findMany({
-    where: { workDate: { gte: sinceDate } },
+    where: {
+      workDate: { gte: sinceDate },
+      ...(employeeId ? { timesheetHeader: { employeeId } } : {}),
+    },
     select: {
       timesheetHeader: { select: { employeeId: true } },
       task: { select: { projectId: true } },
