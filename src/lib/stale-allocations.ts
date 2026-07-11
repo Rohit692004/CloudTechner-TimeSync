@@ -16,6 +16,7 @@ import {
   getRecentActivityKeys,
   staleAllocationCutoff,
   todayUTC,
+  STALE_ALLOCATION_DAYS,
 } from "@/lib/allocation";
 
 export type StaleAllocation = {
@@ -103,4 +104,85 @@ export async function applyStaleAllocationCleanup(employeeId?: string): Promise<
     )
   );
   return stale.length;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type LateEndedAllocation = {
+  id: string;
+  employeeName: string;
+  projectName: string;
+  allocationPercentage: number;
+  currentEndDate: string;
+  lastLogged: string;
+  correctedEndDate: string;
+};
+
+// Already-ended allocations whose end date was set more than
+// STALE_ALLOCATION_DAYS *after* the person's last actual entry on that project
+// -- i.e. ended far too late (usually a manual "End today" click on something
+// they'd long since stopped logging). These still overlap the current week
+// even though the person moved on ages ago. The correction pulls the end date
+// back to their true last-logged day. Allocations ended on/before their last
+// entry, or with no entries at all, are left untouched.
+export async function getLateEndedAllocationsPreview(): Promise<LateEndedAllocation[]> {
+  const ended = await prisma.projectAllocation.findMany({
+    where: { endDate: { not: null } },
+    include: { employee: { select: { name: true } }, project: { select: { name: true } } },
+  });
+  if (ended.length === 0) return [];
+
+  const employeeIds = [...new Set(ended.map((a) => a.employeeId))];
+  const projectIds = [...new Set(ended.map((a) => a.projectId))];
+  const lines = await prisma.timesheetLine.findMany({
+    where: {
+      timesheetHeader: { employeeId: { in: employeeIds } },
+      task: { projectId: { in: projectIds } },
+    },
+    select: {
+      workDate: true,
+      timesheetHeader: { select: { employeeId: true } },
+      task: { select: { projectId: true } },
+    },
+    orderBy: { workDate: "desc" },
+  });
+  const lastLoggedByPair = new Map<string, Date>();
+  for (const l of lines) {
+    const key = `${l.timesheetHeader.employeeId}|${l.task.projectId}`;
+    if (!lastLoggedByPair.has(key)) lastLoggedByPair.set(key, l.workDate);
+  }
+
+  const out: LateEndedAllocation[] = [];
+  for (const a of ended) {
+    const lastLogged = lastLoggedByPair.get(`${a.employeeId}|${a.projectId}`);
+    if (!lastLogged || !a.endDate) continue;
+    const daysLate = (a.endDate.getTime() - lastLogged.getTime()) / DAY_MS;
+    if (daysLate > STALE_ALLOCATION_DAYS) {
+      out.push({
+        id: a.id,
+        employeeName: a.employee.name,
+        projectName: a.project.name,
+        allocationPercentage: a.allocationPercentage,
+        currentEndDate: a.endDate.toISOString().slice(0, 10),
+        lastLogged: lastLogged.toISOString().slice(0, 10),
+        correctedEndDate: lastLogged.toISOString().slice(0, 10),
+      });
+    }
+  }
+  return out.sort((a, b) => a.employeeName.localeCompare(b.employeeName) || a.projectName.localeCompare(b.projectName));
+}
+
+export async function applyLateEndedCorrection(): Promise<number> {
+  const late = await getLateEndedAllocationsPreview();
+  if (late.length === 0) return 0;
+
+  await prisma.$transaction(
+    late.map((s) =>
+      prisma.projectAllocation.update({
+        where: { id: s.id },
+        data: { endDate: new Date(`${s.correctedEndDate}T00:00:00.000Z`) },
+      })
+    )
+  );
+  return late.length;
 }

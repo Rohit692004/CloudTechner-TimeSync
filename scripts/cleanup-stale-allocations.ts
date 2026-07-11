@@ -14,56 +14,86 @@
 // utilization and drops the project from their current timesheet -- while
 // leaving the weeks they really worked it intact.
 
-import { getStaleAllocationsPreview, applyStaleAllocationCleanup } from "@/lib/stale-allocations";
+import {
+  getStaleAllocationsPreview,
+  applyStaleAllocationCleanup,
+  getLateEndedAllocationsPreview,
+  applyLateEndedCorrection,
+} from "@/lib/stale-allocations";
 import { STALE_ALLOCATION_DAYS } from "@/lib/allocation";
 import { prisma } from "@/lib/prisma";
 
 async function main() {
   const apply = process.argv.includes("--apply");
 
-  const preview = await getStaleAllocationsPreview();
+  const stale = await getStaleAllocationsPreview();
+  const lateEnded = await getLateEndedAllocationsPreview();
 
-  if (preview.length === 0) {
-    console.log("No stale allocations found. Nothing to clean up.");
+  // --- Part 1: open-ended allocations gone stale ---
+  if (stale.length === 0) {
+    console.log("Part 1 - Open stale allocations: none found.\n");
+  } else {
+    console.log(
+      `Part 1 - ${stale.length} OPEN stale allocation(s) (started >${STALE_ALLOCATION_DAYS}d ago, no entries in last ${STALE_ALLOCATION_DAYS}d) -> will be closed:\n`
+    );
+    console.log(
+      "Employee".padEnd(24) + "Project".padEnd(30) + "%".padEnd(5) + "Started".padEnd(13) + "Last logged".padEnd(14) + "Will end on"
+    );
+    console.log("-".repeat(100));
+    for (const s of stale) {
+      console.log(
+        s.employeeName.slice(0, 22).padEnd(24) +
+          s.projectName.slice(0, 28).padEnd(30) +
+          `${s.allocationPercentage}%`.padEnd(5) +
+          s.startDate.padEnd(13) +
+          (s.lastLogged ?? "never").padEnd(14) +
+          s.proposedEndDate
+      );
+    }
+    console.log();
+  }
+
+  // --- Part 2: already-ended allocations whose end date is far too late ---
+  if (lateEnded.length === 0) {
+    console.log("Part 2 - Allocations ended too late: none found.\n");
+  } else {
+    console.log(
+      `Part 2 - ${lateEnded.length} allocation(s) ended >${STALE_ALLOCATION_DAYS}d after the last entry -> end date corrected back to last logged:\n`
+    );
+    console.log(
+      "Employee".padEnd(24) + "Project".padEnd(30) + "%".padEnd(5) + "Ended on".padEnd(13) + "Last logged".padEnd(14) + "Corrected to"
+    );
+    console.log("-".repeat(100));
+    for (const s of lateEnded) {
+      console.log(
+        s.employeeName.slice(0, 22).padEnd(24) +
+          s.projectName.slice(0, 28).padEnd(30) +
+          `${s.allocationPercentage}%`.padEnd(5) +
+          s.currentEndDate.padEnd(13) +
+          s.lastLogged.padEnd(14) +
+          s.correctedEndDate
+      );
+    }
+    console.log();
+  }
+
+  if (stale.length === 0 && lateEnded.length === 0) {
+    console.log("Nothing to clean up.");
     return;
   }
 
-  console.log(
-    `Found ${preview.length} stale allocation(s) (open-ended, started >${STALE_ALLOCATION_DAYS}d ago, no entries in last ${STALE_ALLOCATION_DAYS}d):\n`
-  );
-  console.log(
-    "Employee".padEnd(24) +
-      "Project".padEnd(30) +
-      "%".padEnd(5) +
-      "Started".padEnd(13) +
-      "Last logged".padEnd(14) +
-      "Will end on"
-  );
-  console.log("-".repeat(100));
-  for (const s of preview) {
-    console.log(
-      s.employeeName.slice(0, 22).padEnd(24) +
-        s.projectName.slice(0, 28).padEnd(30) +
-        `${s.allocationPercentage}%`.padEnd(5) +
-        s.startDate.padEnd(13) +
-        (s.lastLogged ?? "never").padEnd(14) +
-        s.proposedEndDate
-    );
-  }
-
-  const affectedEmployees = new Set(preview.map((s) => s.employeeName)).size;
-  console.log(
-    `\nSummary: ${preview.length} allocation(s) across ${affectedEmployees} employee(s) would be closed.`
-  );
+  const employees = new Set([...stale.map((s) => s.employeeName), ...lateEnded.map((s) => s.employeeName)]).size;
+  console.log(`Summary: ${stale.length} to close + ${lateEnded.length} to correct, across ${employees} employee(s).`);
 
   if (!apply) {
-    console.log("\nThis was a PREVIEW -- nothing was changed. Re-run with --apply to write these end dates.");
+    console.log("\nThis was a PREVIEW -- nothing was changed. Re-run with --apply to write these changes.");
     return;
   }
 
   console.log("\nApplying...");
-  const ended = await applyStaleAllocationCleanup();
-  console.log(`Done. Ended ${ended} allocation(s).`);
+  const closed = await applyStaleAllocationCleanup();
+  const corrected = await applyLateEndedCorrection();
+  console.log(`Done. Closed ${closed} open stale allocation(s), corrected ${corrected} late-ended allocation(s).`);
 }
 
 main()
