@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CloudTechner TimeSync",
-  description: "In-house timesheet application by CloudTechner",
+  title: "CloudTechner - CT Orbit",
+  description: "Track Progress. Stay Connected. Keep Moving.",
 };
 
 export default function RootLayout({

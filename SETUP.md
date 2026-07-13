@@ -1,4 +1,4 @@
-# CloudTechner TimeSync — Local Setup Guide
+# CloudTechner CT Orbit — Local Setup Guide
 
 A step-by-step guide to run this timesheet app on a fresh machine. No prior
 knowledge of the project is assumed. Distributed as a **zip** (not GitHub).
@@ -221,19 +221,19 @@ source name if your folder differs):
 
 ```powershell
 $src = "Timesheet app"
-$dst = "TimeSync-clean"
+$dst = "CT-Orbit-clean"
 robocopy $src $dst /E /XD node_modules .next .git /XF .env | Out-Null
-Compress-Archive -Path "$dst\*" -DestinationPath "TimeSync.zip" -Force
+Compress-Archive -Path "$dst\*" -DestinationPath "CT-Orbit.zip" -Force
 Remove-Item -Recurse -Force $dst
 ```
 
 **macOS/Linux** — run from *inside* the project folder:
 
 ```bash
-zip -r ../TimeSync.zip . -x 'node_modules/*' '.next/*' '.git/*' '.env'
+zip -r ../CT-Orbit.zip . -x 'node_modules/*' '.next/*' '.git/*' '.env'
 ```
 
-The resulting `TimeSync.zip` is what you share. The recipient follows this guide
+The resulting `CT-Orbit.zip` is what you share. The recipient follows this guide
 from step 2. Keep `.env.example`, `prisma/`, and `PROJECT_PLAN.md` in the zip —
 they're needed.
 

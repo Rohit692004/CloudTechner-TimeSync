@@ -122,7 +122,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <img src="/logo.png" alt="CloudTechner Logo" className="h-9 w-9 object-contain rounded-md bg-white p-0.5 shadow-sm" />
           <div className="flex flex-col min-w-0 leading-tight">
             <span className="text-sm font-bold tracking-tight text-white">CloudTechner</span>
-            <span className="text-xs font-light text-white/70">TimeSync</span>
+            <span className="text-xs font-light text-white/70">CT Orbit</span>
           </div>
           <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-emerald-400 select-none">
             v1.0
@@ -179,7 +179,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             </Link>
             <span className="text-gray-300">/</span>
             <span className="text-foreground capitalize font-semibold">
-              TimeSync Portal
+              CT Orbit Portal
             </span>
           </div>
         </header>

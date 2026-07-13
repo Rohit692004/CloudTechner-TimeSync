@@ -26,13 +26,12 @@ export default async function LoginPage({
             backgroundSize: "40px 40px"
           }}
         />
-
         {/* Top Brand Header */}
         <div className="relative z-10 flex items-center gap-3">
           <img src="/logo.png" alt="CloudTechner Logo" className="h-10 w-10 object-contain rounded-md bg-white p-0.5" />
           <div>
             <strong className="text-base font-semibold tracking-tight block text-white">CloudTechner</strong>
-            <small className="text-xs text-white/60">TimeSync · Enterprise</small>
+            <small className="text-xs text-white/60">CT Orbit · Enterprise</small>
           </div>
         </div>
 
@@ -46,9 +45,8 @@ export default async function LoginPage({
             Every hour, <span className="bg-gradient-to-r from-[#7AC143] to-[#0E9DC4] bg-clip-text text-transparent">accounted for.</span>
           </h1>
           <p className="text-sm text-white/70 leading-relaxed mb-8">
-            Log time against projects, track approvals, and manage allocations — replacing external portals with a workflow built for how our teams actually operate.
+            Track Progress. Stay Connected. Keep Moving.
           </p>
-
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 text-sm text-white/90">
               <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
@@ -84,12 +82,10 @@ export default async function LoginPage({
           <div className="mb-8">
             {/* Show mobile branding since hero is hidden */}
             <div className="flex md:hidden items-center gap-3 mb-6">
-              <div className="flex h-9 w-9 items-center justify-center rounded-md bg-gradient-to-br from-[#7AC143] via-[#0E9DC4] to-[#3B82F6] text-sm font-bold text-white">
-                C
-              </div>
+              <img src="/logo.png" alt="CloudTechner Logo" className="h-8 w-8 object-contain rounded-md bg-gray-50 p-0.5 border border-gray-100" />
               <div>
-                <strong className="text-sm font-bold tracking-tight block">CloudTechner</strong>
-                <small className="text-xs text-muted-foreground">TimeSync</small>
+                <strong className="text-sm font-bold tracking-tight block text-gray-900">CloudTechner</strong>
+                <small className="text-xs text-muted-foreground block">CT Orbit</small>
               </div>
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-1">Welcome back</h2>
