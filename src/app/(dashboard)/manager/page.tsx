@@ -22,6 +22,9 @@ export default async function ManagerDashboard() {
       where: {
         approvedById: user.id,
         status: "SUBMITTED",
+        // Don't surface pending requests from employees who have since been
+        // relieved/deactivated -- they've left, so there's nothing to action.
+        employee: { isActive: true },
         OR: [
           { isLate: false },
           { isLate: true, lateApproved: true }

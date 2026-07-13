@@ -43,6 +43,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
       where: {
         approvedById: userId,
         status: "SUBMITTED",
+        // Match the approvals list: exclude relieved/deactivated employees so the
+        // badge count doesn't include requests that can no longer be actioned.
+        employee: { isActive: true },
         OR: [
           { isLate: false },
           { isLate: true, lateApproved: true }
