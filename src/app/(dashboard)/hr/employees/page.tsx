@@ -7,8 +7,8 @@ import { mondayOf } from "@/lib/dates";
 import { EmployeeList } from "./employee-list";
 
 export default async function EmployeesPage() {
-  // Protect page for HR_ADMIN only
-  await requireRole("HR_ADMIN");
+  // Protect page for HR_ADMIN and TS_ADMIN
+  await requireRole("HR_ADMIN", "TS_ADMIN");
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

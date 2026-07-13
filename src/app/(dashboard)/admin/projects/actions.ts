@@ -3,12 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-guards";
-import type { BillingModel, ProjectStatus } from "@prisma/client";
+import type { BillingModel, ProjectStatus, CommentsCriteria } from "@prisma/client";
 
 const DEFAULT_TASK_TEMPLATE = ["Project work", "Project work - WFH", "Project work - Client", "Training"];
 
 const PROJECT_STATUS_VALUES = ["NOT_STARTED", "IN_PROGRESS", "ON_HOLD", "COMPLETED"];
 const BILLING_MODEL_VALUES = ["TIME_AND_MATERIAL", "FIXED_FEE", "RETAINER", "NON_BILLABLE"];
+const COMMENTS_CRITERIA_VALUES = ["NOT_REQUIRED", "COMPULSORY", "LESS_THAN_8_HOURS", "MORE_THAN_8_HOURS"];
 
 function str(formData: FormData, key: string): string | null {
   const v = String(formData.get(key) ?? "").trim();
@@ -47,6 +48,9 @@ export async function createProject(formData: FormData) {
   const billingRaw = str(formData, "billingModel") ?? "TIME_AND_MATERIAL";
   const billingModel = (BILLING_MODEL_VALUES.includes(billingRaw) ? billingRaw : "TIME_AND_MATERIAL") as BillingModel;
 
+  const commentsCriteriaRaw = str(formData, "commentsCriteria") ?? "COMPULSORY";
+  const commentsCriteria = (COMMENTS_CRITERIA_VALUES.includes(commentsCriteriaRaw) ? commentsCriteriaRaw : "COMPULSORY") as CommentsCriteria;
+
   const startDate = parseDate(formData, "startDate");
   const endDate = parseDate(formData, "endDate");
   if (startDate && endDate && endDate < startDate) {
@@ -66,6 +70,7 @@ export async function createProject(formData: FormData) {
       costBudget: parseDecimal(formData, "costBudget"),
       hoursBudget: parseDecimal(formData, "hoursBudget"),
       billingModel,
+      commentsCriteria,
       linkExpenses: formData.get("linkExpenses") === "on",
       tasks: {
         create: DEFAULT_TASK_TEMPLATE.map((taskName) => ({
@@ -98,6 +103,9 @@ export async function updateProject(id: string, formData: FormData) {
 
   const billingRaw = str(formData, "billingModel") ?? "TIME_AND_MATERIAL";
   const billingModel = (BILLING_MODEL_VALUES.includes(billingRaw) ? billingRaw : "TIME_AND_MATERIAL") as BillingModel;
+
+  const commentsCriteriaRaw = str(formData, "commentsCriteria") ?? "COMPULSORY";
+  const commentsCriteria = (COMMENTS_CRITERIA_VALUES.includes(commentsCriteriaRaw) ? commentsCriteriaRaw : "COMPULSORY") as CommentsCriteria;
 
   const startDate = parseDate(formData, "startDate");
   const endDate = parseDate(formData, "endDate");
@@ -154,6 +162,7 @@ export async function updateProject(id: string, formData: FormData) {
       costBudget: parseDecimal(formData, "costBudget"),
       hoursBudget: parseDecimal(formData, "hoursBudget"),
       billingModel,
+      commentsCriteria,
       linkExpenses: formData.get("linkExpenses") === "on",
     },
   });

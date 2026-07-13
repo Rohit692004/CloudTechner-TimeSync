@@ -31,6 +31,7 @@ type Task = {
   clientName: string;
   allocationStartDate?: string;
   allocationEndDate?: string | null;
+  commentsCriteria?: string;
 };
 
 export function TimesheetGrid({
@@ -169,20 +170,32 @@ export function TimesheetGrid({
   function handleSubmit() {
     setError(null);
     
-    // Check if any cell with hours > 0 has empty notes/comments
+    // Check if any cell with hours > 0 has empty notes/comments according to project criteria
     const missingNotes: string[] = [];
     for (const [key, val] of Object.entries(hours)) {
       if (val > 0) {
-        const note = notes[key] ?? "";
-        if (!note.trim()) {
-          const [, date] = key.split("__");
-          missingNotes.push(date);
+        const [taskId, date] = key.split("__");
+        const task = tasks.find((t) => t.id === taskId);
+        const criteria = task?.commentsCriteria ?? "COMPULSORY";
+
+        let requiresComment = false;
+        if (criteria === "COMPULSORY") {
+          requiresComment = true;
+        } else if (criteria === "LESS_THAN_8_HOURS" || criteria === "MORE_THAN_8_HOURS") {
+          requiresComment = val !== 8;
+        }
+
+        if (requiresComment) {
+          const note = notes[key] ?? "";
+          if (!note.trim()) {
+            missingNotes.push(date);
+          }
         }
       }
     }
 
     if (missingNotes.length > 0) {
-      setError("Please add a comment description for all days you log hours. Missing comments for dates: " + [...new Set(missingNotes)].join(", "));
+      setError("Please add a comment description for the days you logged hours that require comments (based on project settings). Missing comments for dates: " + [...new Set(missingNotes)].join(", "));
       return;
     }
 
@@ -351,30 +364,53 @@ export function TimesheetGrid({
                                     ...prev,
                                     [key]: v,
                                   }));
+                                  const c = task.commentsCriteria ?? "COMPULSORY";
+                                  if (v === 8 && (c === "LESS_THAN_8_HOURS" || c === "MORE_THAN_8_HOURS")) {
+                                    setNotes((prev) => {
+                                      const next = { ...prev };
+                                      delete next[key];
+                                      return next;
+                                    });
+                                  }
                                 }}
                                 className="w-16 text-center mx-auto bg-white"
                               />
-                              {val > 0 && (hasNote || editable) && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCommentingCell({
-                                      taskId: task.id,
-                                      taskName: task.name,
-                                      projectName: task.projectName,
-                                      clientName: task.clientName,
-                                      date,
-                                    })
-                                  }
-                                  className={`flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] gap-1 font-medium transition-all ${
-                                    hasNote
-                                      ? "text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100"
-                                      : "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 animate-pulse"
-                                  }`}
-                                >
-                                  <span>{hasNote ? "📝 Note" : "➕ Comment"}</span>
-                                </button>
-                              )}
+                              {val > 0 && (hasNote || editable) && (() => {
+                                const criteria = task.commentsCriteria ?? "COMPULSORY";
+                                if ((criteria === "LESS_THAN_8_HOURS" || criteria === "MORE_THAN_8_HOURS") && val === 8) {
+                                  return null;
+                                }
+                                let commentRequired = false;
+                                if (criteria === "COMPULSORY") {
+                                  commentRequired = true;
+                                } else if (criteria === "LESS_THAN_8_HOURS" || criteria === "MORE_THAN_8_HOURS") {
+                                  commentRequired = val !== 8;
+                                }
+
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCommentingCell({
+                                        taskId: task.id,
+                                        taskName: task.name,
+                                        projectName: task.projectName,
+                                        clientName: task.clientName,
+                                        date,
+                                      })
+                                    }
+                                    className={`flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] gap-1 font-medium transition-all ${
+                                      hasNote
+                                        ? "text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100"
+                                        : commentRequired
+                                        ? "text-red-700 bg-red-50 border border-red-200 hover:bg-red-100 animate-pulse"
+                                        : "text-gray-650 bg-gray-50 border border-gray-250 hover:bg-gray-100"
+                                    }`}
+                                  >
+                                    <span>{hasNote ? "📝 Note" : "➕ Comment"}</span>
+                                  </button>
+                                );
+                              })()}
                               {originalHolidayName && editable && (
                                 <button
                                   type="button"

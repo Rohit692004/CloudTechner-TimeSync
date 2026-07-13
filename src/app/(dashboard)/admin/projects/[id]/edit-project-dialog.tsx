@@ -35,6 +35,7 @@ type ProjectInput = {
   hoursBudget: number | null;
   billingModel: string;
   linkExpenses: boolean;
+  commentsCriteria: string;
 };
 
 export function EditProjectDialog({
@@ -44,6 +45,12 @@ export function EditProjectDialog({
   project: ProjectInput;
   employees: { id: string; name: string }[];
 }) {
+  const COMMENTS_CRITERIA = [
+    { value: "NOT_REQUIRED", label: "No comments required" },
+    { value: "COMPULSORY", label: "Compulsory for all hours" },
+    { value: "LESS_THAN_8_HOURS", label: "Required if less than or greater than 8 hours logged" },
+  ];
+
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +58,7 @@ export function EditProjectDialog({
   const [status, setStatus] = useState(project.status);
   const [managerId, setManagerId] = useState(project.projectManagerId ?? "none");
   const [billingModel, setBillingModel] = useState(project.billingModel);
+  const [commentsCriteria, setCommentsCriteria] = useState(project.commentsCriteria);
 
   const defaultStartStr = project.startDate ? new Date(project.startDate).toISOString().slice(0, 10) : "";
   const defaultEndStr = project.endDate ? new Date(project.endDate).toISOString().slice(0, 10) : "";
@@ -59,6 +67,7 @@ export function EditProjectDialog({
     setStatus(project.status);
     setManagerId(project.projectManagerId ?? "none");
     setBillingModel(project.billingModel);
+    setCommentsCriteria(project.commentsCriteria);
     setError(null);
   }
 
@@ -67,6 +76,7 @@ export function EditProjectDialog({
     formData.set("status", status);
     formData.set("projectManagerId", managerId === "none" ? "" : managerId);
     formData.set("billingModel", billingModel);
+    formData.set("commentsCriteria", commentsCriteria);
     
     startTransition(async () => {
       try {
@@ -216,6 +226,24 @@ export function EditProjectDialog({
                   {BILLING_MODELS.map((b) => (
                     <SelectItem key={b.value} value={b.value}>
                       {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label>Comments Criteria *</Label>
+              <Select value={commentsCriteria} onValueChange={(v) => setCommentsCriteria(v ?? "COMPULSORY")}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value) => COMMENTS_CRITERIA.find((c) => c.value === value)?.label}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {COMMENTS_CRITERIA.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

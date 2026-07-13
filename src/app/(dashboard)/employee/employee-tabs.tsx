@@ -13,6 +13,7 @@ import {
 import { TimesheetGrid } from "./timesheet-grid";
 import { Calendar, Clock, Award, LineChart } from "lucide-react";
 import Link from "next/link";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 type Holiday = {
   id: string;
@@ -20,6 +21,16 @@ type Holiday = {
   date: string;
   isFloaterLeave: boolean;
   specialHoliday: boolean;
+};
+
+type HistoryAllocation = {
+  id: string;
+  projectName: string;
+  clientName: string;
+  allocationPercentage: number;
+  startDate: string;
+  endDate: string | null;
+  status: string;
 };
 
 export function EmployeeTabs({
@@ -48,6 +59,8 @@ export function EmployeeTabs({
   holidaysList,
   holidayDates,
   approverName,
+  historyAllocations,
+  notifications = [],
 }: {
   weekStartISO: string;
   dates: string[];
@@ -73,11 +86,31 @@ export function EmployeeTabs({
   holidaysList: Holiday[];
   holidayDates: Record<string, string>;
   approverName: string;
+  historyAllocations: HistoryAllocation[];
+  notifications?: any[];
 }) {
   return (
-    <div className="flex flex-col gap-6">
-      {/* Header action bar */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-150 pb-4 gap-4">
+    <Tabs defaultValue="timesheet" className="w-full flex flex-col gap-6">
+      <div className="flex items-center justify-between border-b border-gray-150 pb-2">
+        <TabsList className="bg-transparent border-b-0 p-0 gap-6">
+          <TabsTrigger
+            value="timesheet"
+            className="px-2 py-1.5 text-sm font-semibold border-b-2 border-transparent data-active:border-emerald-600 rounded-none bg-transparent hover:text-emerald-700 data-active:text-emerald-800 shadow-none dark:bg-transparent dark:data-active:bg-transparent data-active:shadow-none"
+          >
+            Weekly Timesheet
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="px-2 py-1.5 text-sm font-semibold border-b-2 border-transparent data-active:border-emerald-600 rounded-none bg-transparent hover:text-emerald-700 data-active:text-emerald-800 shadow-none dark:bg-transparent dark:data-active:bg-transparent data-active:shadow-none"
+          >
+            Project History
+          </TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="timesheet" className="flex flex-col gap-6 outline-none">
+        {/* Header action bar */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-150 pb-4 gap-4">
         <div className="flex flex-col">
           <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">Timesheet Approver</span>
           <span className="text-sm font-bold text-gray-800">{approverName}</span>
@@ -94,6 +127,32 @@ export function EmployeeTabs({
       </div>
 
       {feedbackAlert}
+
+      {/* Notifications from Allocation/Requests */}
+      {notifications.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {notifications.map((notif) => (
+            <div
+              key={notif.id}
+              className="flex items-start justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-emerald-900 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300"
+            >
+              <div className="flex items-start gap-3">
+                <div className="bg-emerald-100 text-emerald-800 p-1.5 rounded-full mt-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a9.04 9.04 0 0 1-2.228 1.13c-.156.046-.32.062-.486.048a9.04 9.04 0 0 1-2.228-1.13m4.914-11.454A7.5 7.5 0 0 1 18 8v6.22c0 .384.055.762.164 1.127l.707 2.385A1.5 1.5 0 0 1 17.437 20H6.563a1.5 1.5 0 0 1-1.438-2.268l.707-2.384a2.224 2.224 0 0 0 .164-1.128V8a7.5 7.5 0 0 1 5.6-7.372" />
+                  </svg>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-semibold text-xs">{notif.message}</span>
+                  <span className="text-[10px] text-emerald-600/70 font-mono">
+                    {new Date(notif.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Stats Cards Row */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -353,6 +412,86 @@ export function EmployeeTabs({
           </CardContent>
         </Card>
       </div>
-    </div>
+      </TabsContent>
+
+      <TabsContent value="history" className="flex flex-col gap-6 outline-none">
+        <Card className="border border-gray-150 shadow-sm bg-white">
+          <CardHeader className="border-b border-gray-50 pb-4">
+            <CardTitle className="text-base font-bold text-gray-805">Project Allocation History</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              A comprehensive read-only view of all projects you have been allocated to, along with their start and end dates.
+            </p>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gray-50/50 hover:bg-gray-50/50">
+                    <TableHead className="font-semibold text-gray-700 text-xs">Client</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs">Project</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs">Allocation</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs">Start Date</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-xs">End Date</TableHead>
+                    <TableHead className="font-semibold text-gray-700 text-right text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {historyAllocations.map((alloc) => (
+                    <TableRow key={alloc.id} className="hover:bg-gray-50/50">
+                      <TableCell className="font-bold text-gray-850 text-xs">{alloc.clientName}</TableCell>
+                      <TableCell className="font-medium text-gray-700 text-xs">{alloc.projectName}</TableCell>
+                      <TableCell className="text-xs font-semibold text-gray-750">
+                        <div className="flex items-center gap-2">
+                          <span className="w-12">{alloc.allocationPercentage}%</span>
+                          <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden hidden sm:block">
+                            <div
+                              className="h-full bg-emerald-600 rounded-full"
+                              style={{ width: `${alloc.allocationPercentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-600 font-mono">{alloc.startDate}</TableCell>
+                      <TableCell className="text-xs text-gray-600 font-mono">
+                        {alloc.endDate ? (
+                          alloc.endDate
+                        ) : (
+                          <span className="text-gray-400 italic font-sans font-normal">Ongoing</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge
+                          variant="outline"
+                          className={`font-bold px-2 py-0.5 text-[10px] uppercase tracking-wider ${
+                            alloc.status === "Active"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                              : alloc.status === "Ended"
+                              ? "bg-gray-55/70 text-gray-500 border-gray-200"
+                              : alloc.status === "Upcoming"
+                              ? "bg-sky-50 text-sky-700 border-sky-200"
+                              : alloc.status === "Project Inactive"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-red-50 text-red-700 border-red-200"
+                          }`}
+                        >
+                          {alloc.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {historyAllocations.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-12 text-xs">
+                        No project allocations found in your history.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }

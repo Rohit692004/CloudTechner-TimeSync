@@ -82,10 +82,40 @@ async function upsertTimesheet(
   let approvedById: string | null = existing?.approvedById ?? null;
 
   if (targetStatus === "SUBMITTED") {
-    // Check if any line with hours > 0 has empty notes/comments
-    const hasEmptyNotes = lines.some((l) => !l.notes);
-    if (hasEmptyNotes) {
-      throw new Error("A comment/notes description is required for every day you log hours.");
+    // Fetch comments criteria for the tasks being submitted
+    const taskIdsForValidation = lines.map((l) => l.taskId);
+    const tasksWithCriteria = await prisma.task.findMany({
+      where: { id: { in: taskIdsForValidation } },
+      include: {
+        project: {
+          select: { commentsCriteria: true },
+        },
+      },
+    });
+
+    const criteriaMap = new Map(
+      tasksWithCriteria.map((t) => [t.id, t.project.commentsCriteria])
+    );
+
+    // Validate notes against the criteria
+    for (const line of lines) {
+      const criteria = criteriaMap.get(line.taskId) ?? "COMPULSORY";
+
+      // Under the combined option (less/greater than 8 hours), if hours is exactly 8, comments are not allowed/required.
+      if ((criteria === "LESS_THAN_8_HOURS" || criteria === "MORE_THAN_8_HOURS") && line.hours === 8) {
+        line.notes = "";
+      }
+
+      let requiresComment = false;
+      if (criteria === "COMPULSORY") {
+        requiresComment = true;
+      } else if (criteria === "LESS_THAN_8_HOURS" || criteria === "MORE_THAN_8_HOURS") {
+        requiresComment = line.hours !== 8;
+      }
+
+      if (requiresComment && !line.notes) {
+        throw new Error(`A comment/notes description is required for the day you logged ${line.hours} hours based on the project's criteria.`);
+      }
     }
 
     const employee = await prisma.employee.findUniqueOrThrow({ where: { id: employeeId } });

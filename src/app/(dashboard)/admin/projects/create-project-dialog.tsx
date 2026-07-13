@@ -35,16 +35,24 @@ export function CreateProjectDialog({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const COMMENTS_CRITERIA = [
+    { value: "NOT_REQUIRED", label: "No comments required" },
+    { value: "COMPULSORY", label: "Compulsory for all hours" },
+    { value: "LESS_THAN_8_HOURS", label: "Required if less than or greater than 8 hours logged" },
+  ];
+
   const [clientId, setClientId] = useState("");
   const [status, setStatus] = useState("IN_PROGRESS");
   const [managerId, setManagerId] = useState("");
   const [billingModel, setBillingModel] = useState("TIME_AND_MATERIAL");
+  const [commentsCriteria, setCommentsCriteria] = useState("COMPULSORY");
 
   function reset() {
     setClientId("");
     setStatus("IN_PROGRESS");
     setManagerId("");
     setBillingModel("TIME_AND_MATERIAL");
+    setCommentsCriteria("COMPULSORY");
     setError(null);
   }
 
@@ -54,6 +62,7 @@ export function CreateProjectDialog({
     formData.set("status", status);
     formData.set("projectManagerId", managerId);
     formData.set("billingModel", billingModel);
+    formData.set("commentsCriteria", commentsCriteria);
     startTransition(async () => {
       try {
         await createProject(formData);
@@ -194,6 +203,24 @@ export function CreateProjectDialog({
                 {BILLING_MODELS.map((b) => (
                   <SelectItem key={b.value} value={b.value}>
                     {b.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Comments Criteria *</Label>
+            <Select value={commentsCriteria} onValueChange={(v) => setCommentsCriteria(v ?? "COMPULSORY")}>
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {(value) => COMMENTS_CRITERIA.find((c) => c.value === value)?.label}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {COMMENTS_CRITERIA.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>

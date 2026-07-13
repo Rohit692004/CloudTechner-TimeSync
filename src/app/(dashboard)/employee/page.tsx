@@ -1,3 +1,5 @@
+
+
 import Link from "next/link";
 import { requireRole } from "@/lib/auth-guards";
 import { prisma } from "@/lib/prisma";
@@ -17,6 +19,7 @@ import { TimesheetGrid } from "./timesheet-grid";
 import { withdrawTimesheet } from "./actions";
 import { WeekDatePicker } from "@/components/week-date-picker";
 import { EmployeeTabs } from "./employee-tabs";
+import { allocationStatusFor } from "@/lib/allocation";
 
 const STATUS_VARIANT = {
   DRAFT: "secondary",
@@ -89,6 +92,7 @@ export default async function EmployeeDashboard({
       clientName: string;
       allocationStartDate: string;
       allocationEndDate: string | null;
+      commentsCriteria: string;
     }
   >();
   for (const a of allocations) {
@@ -100,6 +104,7 @@ export default async function EmployeeDashboard({
         clientName: a.project.client.name,
         allocationStartDate: toISODate(a.startDate),
         allocationEndDate: a.endDate ? toISODate(a.endDate) : null,
+        commentsCriteria: a.project.commentsCriteria,
       });
     }
   }
@@ -326,11 +331,53 @@ export default async function EmployeeDashboard({
   const empDetails = await prisma.employee.findUnique({
     where: { id: user.id },
     select: {
+      isActive: true,
       reportingManager: { select: { name: true } },
       approverOverride: { select: { name: true } },
     },
   });
   const approverName = empDetails?.approverOverride?.name ?? empDetails?.reportingManager?.name ?? "HR Admin";
+
+  const allAllocations = await prisma.projectAllocation.findMany({
+    where: { employeeId: user.id },
+    include: {
+      project: {
+        include: {
+          client: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { startDate: "desc" },
+  });
+
+  const historyAllocations = allAllocations.map((a) => {
+    const status = allocationStatusFor(
+      a.startDate,
+      a.endDate,
+      empDetails?.isActive ?? true,
+      a.project.isActive
+    );
+    return {
+      id: a.id,
+      projectName: a.project.name,
+      clientName: a.project.client.name,
+      allocationPercentage: a.allocationPercentage,
+      startDate: toISODate(a.startDate),
+      endDate: a.endDate ? toISODate(a.endDate) : null,
+      status,
+    };
+  });
+
+  const notifications = await prisma.notification.findMany({
+    where: { employeeId: user.id, isRead: false },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const serializedNotifications = notifications.map((n) => ({
+    id: n.id,
+    message: n.message,
+    createdAt: n.createdAt.toISOString(),
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -366,6 +413,8 @@ export default async function EmployeeDashboard({
         holidaysList={holidaysList}
         holidayDates={holidayDates}
         approverName={approverName}
+        historyAllocations={historyAllocations}
+        notifications={serializedNotifications}
       />
     </div>
   );

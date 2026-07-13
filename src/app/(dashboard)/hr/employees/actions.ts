@@ -23,7 +23,7 @@ function validatePassword(password: string) {
 }
 
 export async function createEmployee(formData: FormData) {
-  await requireRole("HR_ADMIN");
+  await requireRole("HR_ADMIN", "TS_ADMIN");
 
   const id = str(formData, "id");
   if (!id) throw new Error("Employee ID is required");
@@ -79,10 +79,10 @@ export async function createEmployee(formData: FormData) {
 }
 
 export async function toggleEmployeeActive(id: string, isActive: boolean) {
-  await requireRole("HR_ADMIN");
+  await requireRole("HR_ADMIN", "TS_ADMIN");
 
   // Prevent HR admin from deactivating themselves
-  const sessionUser = await requireRole("HR_ADMIN");
+  const sessionUser = await requireRole("HR_ADMIN", "TS_ADMIN");
   if (sessionUser.id === id && !isActive) {
     throw new Error("You cannot deactivate your own profile.");
   }
@@ -106,7 +106,7 @@ export type ProjectHistoryEntry = {
 };
 
 export async function getEmployeeProjectHistory(employeeId: string): Promise<ProjectHistoryEntry[]> {
-  await requireRole("HR_ADMIN");
+  await requireRole("HR_ADMIN", "TS_ADMIN");
 
   const allocations = await prisma.projectAllocation.findMany({
     where: { employeeId },
@@ -137,7 +137,7 @@ export async function getEmployeeProjectHistory(employeeId: string): Promise<Pro
 }
 
 export async function updateEmployee(id: string, formData: FormData) {
-  await requireRole("HR_ADMIN");
+  await requireRole("HR_ADMIN", "TS_ADMIN");
 
   const name = str(formData, "name");
   if (!name) throw new Error("Employee name is required");

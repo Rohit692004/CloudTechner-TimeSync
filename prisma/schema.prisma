@@ -42,13 +42,13 @@ enum BillingModel {
 }
 
 model Employee {
-  id                 String   @id // = Keka Employee ID, no regeneration
-  name               String
-  email              String   @unique
-  phone              String?
-  passwordHash       String
-  role               EmployeeRole @default(EMPLOYEE)
-  title              String?
+  id           String       @id // = Keka Employee ID, no regeneration
+  name         String
+  email        String       @unique
+  phone        String?
+  passwordHash String
+  role         EmployeeRole @default(EMPLOYEE)
+  title        String?
 
   reportingManagerId String?
   reportingManager   Employee?  @relation("ReportingManager", fields: [reportingManagerId], references: [id])
@@ -74,6 +74,8 @@ model Employee {
   holidayPlanId      String?
   holidayPlan        HolidayPlan?        @relation("EmployeeHolidayPlan", fields: [holidayPlanId], references: [id])
   importRuns         ImportRun[]
+  allocationRequests AllocationRequest[] @relation("EmployeeAllocationRequests")
+  notifications      Notification[]      @relation("EmployeeNotifications")
 }
 
 model Client {
@@ -81,19 +83,19 @@ model Client {
   name            String
   code            String?   @unique // e.g. C025
   country         String?
-  billingCurrency String?   // e.g. INR, USD
+  billingCurrency String? // e.g. INR, USD
   clientManagerId String?
   clientManager   Employee? @relation("ClientManager", fields: [clientManagerId], references: [id])
   description     String?
 
   // Billing details
-  billingName     String?
-  addressLine1    String?
-  addressLine2    String?
-  billingCountry  String?
-  state           String?
-  city            String?
-  zip             String?
+  billingName    String?
+  addressLine1   String?
+  addressLine2   String?
+  billingCountry String?
+  state          String?
+  city           String?
+  zip            String?
 
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
@@ -124,8 +126,11 @@ model Project {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  tasks       Task[]
-  allocations ProjectAllocation[]
+  commentsCriteria CommentsCriteria @default(COMPULSORY)
+
+  tasks              Task[]
+  allocations        ProjectAllocation[]
+  allocationRequests AllocationRequest[]
 }
 
 model Task {
@@ -263,8 +268,8 @@ model Holiday {
   specialHoliday Boolean  @default(false)
   createdAt      DateTime @default(now())
 
-  holidayPlanId  String
-  holidayPlan    HolidayPlan @relation(fields: [holidayPlanId], references: [id], onDelete: Cascade)
+  holidayPlanId String
+  holidayPlan   HolidayPlan @relation(fields: [holidayPlanId], references: [id], onDelete: Cascade)
 }
 
 // One row per bulk timesheet import run (see hr/import-timesheets), so admins can
@@ -297,4 +302,44 @@ model ImportRun {
   // regenerated/downloaded later without modeling every flagged-row detail
   // relationally.
   reportDetailsJson String
+}
+
+model AllocationRequest {
+  id                   String                  @id @default(uuid())
+  employeeId           String
+  employee             Employee                @relation("EmployeeAllocationRequests", fields: [employeeId], references: [id], onDelete: Cascade)
+  projectId            String?
+  project              Project?                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  allocationPercentage Int                     @default(100)
+  message              String?
+  status               AllocationRequestStatus @default(PENDING)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  @@index([employeeId])
+  @@index([projectId])
+}
+
+enum AllocationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CommentsCriteria {
+  NOT_REQUIRED
+  COMPULSORY
+  LESS_THAN_8_HOURS
+  MORE_THAN_8_HOURS
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation("EmployeeNotifications", fields: [employeeId], references: [id], onDelete: Cascade)
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId])
 }

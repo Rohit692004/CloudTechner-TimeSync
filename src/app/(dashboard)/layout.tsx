@@ -60,8 +60,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
     isClientManager > 0 ||
     ["TS_ADMIN", "HR_ADMIN", "PROJECT_MANAGER"].includes(userRole);
 
+  let pendingRequestsCount = 0;
+  if (userRole === "TS_ADMIN" || userRole === "HR_ADMIN") {
+    pendingRequestsCount = await prisma.allocationRequest.count({
+      where: { status: "PENDING" },
+    });
+  }
+
   const workspaceItems: NavItem[] = [
     { href: "/employee", label: "My Timesheet", icon: "timesheet" as const },
+    {
+      href: "/requests",
+      label: "Allocation Requests",
+      icon: "requests" as const,
+      badge: pendingRequestsCount > 0 ? pendingRequestsCount : undefined,
+    },
   ];
 
   if (hasManagerDuties) {
@@ -91,6 +104,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isAdminOrHR = userRole === "TS_ADMIN" || userRole === "HR_ADMIN";
   const manageItems: NavItem[] = [];
   if (userRole === "TS_ADMIN") {
+    manageItems.push({ href: "/hr/employees", label: "Employees", icon: "hr-employees" as const });
     manageItems.push({ href: "/admin/clients", label: "Clients", icon: "admin-clients" as const });
     manageItems.push({ href: "/admin/projects", label: "Projects", icon: "admin-projects" as const });
     manageItems.push({ href: "/hr/holidays", label: "Holidays", icon: "holidays" as const });
