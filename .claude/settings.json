@@ -16,7 +16,8 @@
       "Bash(node scratch-test-import.js)",
       "Bash(node scratch-gen-sample.js)",
       "Bash(rm scratch-gen-sample.js)",
-      "Bash(rm -f scratch-verify.ts)"
+      "Bash(rm -f scratch-verify.ts)",
+      "Bash(gh auth *)"
     ]
   }
 }

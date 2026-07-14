@@ -22,7 +22,6 @@ import { getEmployeeProjectHistory, type ProjectHistoryEntry } from "./actions";
 
 const STATUS_VARIANT: Record<ProjectHistoryEntry["status"], "default" | "secondary" | "outline"> = {
   Active: "default",
-  Upcoming: "secondary",
   Ended: "outline",
   "Project Inactive": "outline",
 };

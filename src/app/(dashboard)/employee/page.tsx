@@ -20,6 +20,7 @@ import { withdrawTimesheet } from "./actions";
 import { WeekDatePicker } from "@/components/week-date-picker";
 import { EmployeeTabs } from "./employee-tabs";
 import { allocationStatusFor } from "@/lib/allocation";
+import { computeProjectHistory } from "@/lib/project-history";
 
 const STATUS_VARIANT = {
   DRAFT: "secondary",
@@ -338,35 +339,10 @@ export default async function EmployeeDashboard({
   });
   const approverName = empDetails?.approverOverride?.name ?? empDetails?.reportingManager?.name ?? "HR Admin";
 
-  const allAllocations = await prisma.projectAllocation.findMany({
-    where: { employeeId: user.id },
-    include: {
-      project: {
-        include: {
-          client: { select: { name: true } },
-        },
-      },
-    },
-    orderBy: { startDate: "desc" },
-  });
-
-  const historyAllocations = allAllocations.map((a) => {
-    const status = allocationStatusFor(
-      a.startDate,
-      a.endDate,
-      empDetails?.isActive ?? true,
-      a.project.isActive
-    );
-    return {
-      id: a.id,
-      projectName: a.project.name,
-      clientName: a.project.client.name,
-      allocationPercentage: a.allocationPercentage,
-      startDate: toISODate(a.startDate),
-      endDate: a.endDate ? toISODate(a.endDate) : null,
-      status,
-    };
-  });
+  // Project History is derived from actual timesheet entries (contiguous stints),
+  // not from ProjectAllocation rows -- those had unreliable historical dates from
+  // the bulk import. See src/lib/project-history.ts.
+  const historyAllocations = await computeProjectHistory(user.id);
 
   const notifications = await prisma.notification.findMany({
     where: { employeeId: user.id, isRead: false },
