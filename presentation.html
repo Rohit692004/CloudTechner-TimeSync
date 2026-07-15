@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CT Orbit Presentation Deck</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #07241C;
+      --bg-dark-accent: #051c15;
+      --primary: #10b981;
+      --primary-hover: #059669;
+      --text-dark: #1e293b;
+      --text-light: #f8fafc;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      color: var(--text-dark);
+      background-color: #f1f5f9;
+      overflow-x: hidden;
+    }
+
+    /* Slides Styling */
+    .deck {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .slide {
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      border: 1px solid var(--border-color);
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      padding: 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Dark Theme Slide (Cover & Conclusion) */
+    .slide.dark {
+      background: radial-gradient(circle at top right, var(--bg-dark), var(--bg-dark-accent));
+      color: var(--text-light);
+      border: none;
+    }
+
+    /* Typography */
+    h1, h2, h3 {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+    }
+
+    .slide.dark h1 {
+      font-size: 48px;
+      line-height: 1.2;
+      color: #ffffff;
+      margin-bottom: 16px;
+      font-weight: 800;
+    }
+
+    .slide.dark h2 {
+      font-size: 24px;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 24px;
+    }
+
+    .slide h2.slide-title {
+      font-size: 36px;
+      color: var(--bg-dark);
+      border-left: 5px solid var(--primary);
+      padding-left: 15px;
+      margin-bottom: 30px;
+    }
+
+    .slide.dark h2.slide-title {
+      color: #ffffff;
+      border-left-color: var(--primary);
+    }
+
+    .subtitle {
+      font-size: 18px;
+      color: #94a3b8;
+      font-weight: 400;
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      flex: 1;
+      align-items: start;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 24px;
+      flex: 1;
+      align-items: start;
+    }
+
+    /* Presentation Content Elements */
+    .card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 24px;
+      height: 100%;
+      transition: transform 0.2s;
+    }
+
+    .card.accent {
+      border-left: 4px solid var(--primary);
+    }
+
+    .card h3 {
+      font-size: 20px;
+      margin-bottom: 12px;
+      color: var(--bg-dark);
+    }
+
+    .slide.dark .card h3 {
+      color: var(--primary);
+    }
+
+    .slide.dark .card {
+      background: rgba(255,255,255,0.03);
+      border-color: rgba(255,255,255,0.08);
+      color: #cbd5e1;
+    }
+
+    ul {
+      list-style-type: none;
+    }
+
+    li {
+      margin-bottom: 12px;
+      font-size: 15px;
+      line-height: 1.6;
+      position: relative;
+      padding-left: 24px;
+      color: #475569;
+    }
+
+    .slide.dark li {
+      color: #cbd5e1;
+    }
+
+    li::before {
+      content: "✦";
+      position: absolute;
+      left: 0;
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    /* Footer badge */
+    .slide-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 20px;
+      border-top: 1px solid rgba(0, 0, 0, 0.05);
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .slide.dark .slide-footer {
+      border-top-color: rgba(255, 255, 255, 0.05);
+      color: #64748b;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      background-color: var(--primary);
+      border-radius: 50%;
+    }
+
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    /* Instructions top bar */
+    .print-bar {
+      background: #020617;
+      color: #ffffff;
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      border-radius: 8px;
+      margin: 20px auto 0;
+      max-width: 1200px;
+      border: 1px solid #1e293b;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .print-btn {
+      background: var(--primary);
+      color: #ffffff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.2s;
+    }
+
+    .print-btn:hover {
+      background: var(--primary-hover);
+    }
+
+    /* Print settings */
+    @media print {
+      body {
+        background-color: #ffffff;
+      }
+      .print-bar {
+        display: none !important;
+      }
+      .deck {
+        padding: 0;
+        gap: 0;
+      }
+      .slide {
+        box-shadow: none;
+        border: none;
+        border-radius: 0;
+        width: 100vw;
+        height: 100vh;
+        page-break-after: always;
+        break-after: page;
+        /* Force exact print aspect ratio */
+        aspect-ratio: 16/9;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Instructions Bar -->
+  <div class="print-bar">
+    <div>
+      <strong>📄 PDF Export Ready:</strong> Click the button to open the print dialog. Choose <strong>Save as PDF</strong>, set Layout to <strong>Landscape</strong>, and Paper Size to <strong>A4</strong> or <strong>Letter</strong>.
+    </div>
+    <button class="print-btn" onclick="window.print()">Print to PDF</button>
+  </div>
+
+  <div class="deck">
+
+    <!-- Slide 1: Cover -->
+    <div class="slide dark">
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+        <h2>Project Presentation</h2>
+        <h1>CT Orbit Portal</h1>
+        <p class="subtitle" style="font-size: 22px; color: #a7f3d0; margin-bottom: 24px; font-weight: 500;">
+          Next-Gen Timesheet &amp; Resource Staffing Platform
+        </p>
+        <p class="subtitle">Automating compliance checking, database hygiene, and self-service resource allocation.</p>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text" style="color: #ffffff;">CloudTechner</span>
+        </div>
+        <span>Slide 1 of 6</span>
+      </div>
+    </div>
+
+    <!-- Slide 2: Project Context & Objectives -->
+    <div class="slide">
+      <h2 class="slide-title">Project Context &amp; Objectives</h2>
+      <div class="grid-2">
+        <div class="card accent" style="border-left-color: #0284c7;">
+          <h3 style="color: #0284c7;">Our Objectives</h3>
+          <ul>
+            <li><strong>Automated Compliance:</strong> Streamline and automate timesheet audit controls across all teams.</li>
+            <li><strong>Data Hygiene:</strong> Maintain a clean database by eliminating orphaned or stale log records.</li>
+            <li><strong>Optimized Staffing:</strong> Replace manual coordination with direct, self-service request pipelines.</li>
+          </ul>
+        </div>
+        <div class="card accent" style="border-left-color: var(--primary);">
+          <h3 style="color: var(--primary-hover);">Key Capabilities</h3>
+          <ul>
+            <li><strong>Smart Policy Rules:</strong> Dynamic comment validation per project automatically triggers forms.</li>
+            <li><strong>Self-Cleaning Engine:</strong> Stale comment lines are automatically pruned on timesheet revision.</li>
+            <li><strong>Structured Pipelines:</strong> Self-service portal where employees request allocation directly.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text">CloudTechner</span>
+        </div>
+        <span>Slide 2 of 6</span>
+      </div>
+    </div>
+
+    <!-- Slide 3: Technical Stack & Architecture -->
+    <div class="slide">
+      <h2 class="slide-title">System Stack &amp; Architecture</h2>
+      <div class="grid-2" style="align-items: center;">
+        <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
+          <div>
+            <h3 style="font-size: 18px; margin-bottom: 4px;">⚡ Frontend Engine</h3>
+            <p style="font-size: 13px; color: #475569; line-height: 1.4;">Next.js App Router &amp; Server Actions for sub-second, dynamic page renders.</p>
+          </div>
+          <div>
+            <h3 style="font-size: 18px; margin-bottom: 4px;">📦 Database &amp; ORM</h3>
+            <p style="font-size: 13px; color: #475569; line-height: 1.4;">PostgreSQL database with Prisma ORM for fully type-safe queries and schemas.</p>
+          </div>
+          <div>
+            <h3 style="font-size: 18px; margin-bottom: 4px;">🛡️ Access Security</h3>
+            <p style="font-size: 13px; color: #475569; line-height: 1.4;">NextAuth integration providing robust role-based access control (RBAC).</p>
+          </div>
+        </div>
+        <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: #051c15; border-radius: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+          <img src="architecture_diagram.png" alt="Architecture Diagram" style="max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 6px;" />
+        </div>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text">CloudTechner</span>
+        </div>
+        <span>Slide 3 of 6</span>
+      </div>
+    </div>
+
+    <!-- Slide 4: Smart Comments Validation -->
+    <div class="slide">
+      <h2 class="slide-title">Innovation: Smart Comments Validation</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Dynamic Compliance Rules</h3>
+          <ul>
+            <li><strong>Project-Specific Configurations:</strong> Settings for "No Comments", "Mandatory", or "Log-time Based".</li>
+            <li><strong>The Deviation Standard:</strong> Comments are required only if the log is less than or greater than 8 hours (x &lt; 8 &lt; x).</li>
+            <li><strong>Standard Logs:</strong> Clean 8-hour logs bypass validation, speeding up submission rates.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Automated DB Cleaning</h3>
+          <ul>
+            <li><strong>Server-Side Actions:</strong> Auto-prunes note fields if an employee changes a non-standard hour entry back to 8 hours.</li>
+            <li><strong>Benefits:</strong>
+              <ul>
+                <li>Prevents orphan records.</li>
+                <li>Ensures audit tables only hold valid explanations.</li>
+                <li>Reduces database storage clutter.</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text">CloudTechner</span>
+        </div>
+        <span>Slide 4 of 6</span>
+      </div>
+    </div>
+
+    <!-- Slide 5: Onboarding & Allocation Pipelines -->
+    <div class="slide">
+      <h2 class="slide-title">Onboarding &amp; Allocation Pipeline</h2>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Self-Service Requests</h3>
+          <ul>
+            <li><strong>Employee Portal:</strong> Unassigned staff raise allocation requests directly in-app.</li>
+            <li><strong>Metadata Input:</strong> Specifies target project, start/end dates, allocation percentage, and message.</li>
+            <li><strong>Self-Tracking:</strong> Dedicated project history tab shows all current, past, and upcoming allocations.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>HR / Admin Controls</h3>
+          <ul>
+            <li><strong>Centralized Console:</strong> Pending requests aggregate automatically in the Admin layout.</li>
+            <li><strong>One-Click Onboarding:</strong> Clicking "Approve" pre-populates allocation data and links the project.</li>
+            <li><strong>Auto-Reflective:</strong> Timesheets auto-update with the assigned project grid immediately.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text">CloudTechner</span>
+        </div>
+        <span>Slide 5 of 6</span>
+      </div>
+    </div>
+
+    <!-- Slide 6: Business Outcomes -->
+    <div class="slide dark">
+      <h2 class="slide-title">Business Outcomes &amp; Core Value</h2>
+      <div class="grid-3">
+        <div class="card">
+          <h3>📈 Operational Speed</h3>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 8px;">Automates staffing cycles from days to clicks, allowing managers to allocate team members instantly.</p>
+        </div>
+        <div class="card">
+          <h3>🔒 Compliance &amp; Audit</h3>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 8px;">Maintains audit trail with zero manual oversight. Automated comment scrubbing guarantees high compliance data accuracy.</p>
+        </div>
+        <div class="card">
+          <h3>🚀 Scale Ready</h3>
+          <p style="font-size: 14px; line-height: 1.6; margin-top: 8px;">Engineered to support rapid growth. Clean PostgreSQL schemas and optimized Next.js render pipelines guarantee sub-second updates.</p>
+        </div>
+      </div>
+      <div class="slide-footer">
+        <div class="logo-container">
+          <span class="logo-dot"></span>
+          <span class="logo-text" style="color: #ffffff;">CloudTechner</span>
+        </div>
+        <span>Slide 6 of 6</span>
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

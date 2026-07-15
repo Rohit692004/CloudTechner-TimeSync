@@ -82,6 +82,67 @@ async function upsertTimesheet(
   let approvedById: string | null = existing?.approvedById ?? null;
 
   if (targetStatus === "SUBMITTED") {
+    // ── Enforce 40 Hour Submission Rule & Friday Timing Check ──
+    const dbUser = await prisma.employee.findUniqueOrThrow({
+      where: { id: employeeId },
+      select: { holidayPlanId: true },
+    });
+    const defaultPlan = await prisma.holidayPlan.findFirst({
+      where: { isDefault: true },
+    });
+    const planIds = [defaultPlan?.id].filter(Boolean) as string[];
+    if (dbUser.holidayPlanId) {
+      planIds.push(dbUser.holidayPlanId);
+    }
+    const holidays = await prisma.holiday.findMany({
+      where: {
+        date: { gte: weekStartDate, lte: addDays(weekStartDate, 6) },
+        holidayPlanId: { in: planIds },
+      },
+    });
+
+    const leaves = await prisma.leave.findMany({
+      where: {
+        employeeId,
+        status: "APPROVED",
+        startDate: { lte: addDays(weekStartDate, 6) },
+        endDate: { gte: weekStartDate },
+      },
+    });
+
+    const holidayDates = new Set(holidays.map((h) => toISODate(h.date)));
+    const leaveDates = new Set<string>();
+    for (const l of leaves) {
+      const start = new Date(Math.max(l.startDate.getTime(), weekStartDate.getTime()));
+      const end = new Date(Math.min(l.endDate.getTime(), addDays(weekStartDate, 6).getTime()));
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        leaveDates.add(toISODate(d));
+      }
+    }
+
+    let automaticHours = 0;
+    for (let i = 0; i < 5; i++) {
+      const dateStr = toISODate(addDays(weekStartDate, i));
+      const hasLoggedHours = lines.some((l) => l.workDate === dateStr);
+      if (!hasLoggedHours && (leaveDates.has(dateStr) || holidayDates.has(dateStr))) {
+        automaticHours += 8;
+      }
+    }
+
+    const loggedHours = lines.reduce((s, l) => s + l.hours, 0);
+    const totalEffectiveHours = loggedHours + automaticHours;
+
+    if (totalEffectiveHours < 40) {
+      throw new Error(`You must log a total of at least 40 hours (including leaves and holidays) to submit this timesheet. Current total: ${totalEffectiveHours} hours.`);
+    }
+
+    const fridayOfTimesheetWeek = addDays(weekStartDate, 4);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (today.getTime() < fridayOfTimesheetWeek.getTime()) {
+      throw new Error("You can only submit this timesheet starting from Friday of this timesheet week. Please save it as a draft for now.");
+    }
+
     // Fetch comments criteria for the tasks being submitted
     const taskIdsForValidation = lines.map((l) => l.taskId);
     const tasksWithCriteria = await prisma.task.findMany({

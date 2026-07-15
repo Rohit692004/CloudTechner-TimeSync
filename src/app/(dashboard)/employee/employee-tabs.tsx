@@ -58,6 +58,7 @@ export function EmployeeTabs({
   feedbackAlert,
   holidaysList,
   holidayDates,
+  leaveDates = {},
   approverName,
   historyAllocations,
   notifications = [],
@@ -85,6 +86,7 @@ export function EmployeeTabs({
   feedbackAlert: React.ReactNode;
   holidaysList: Holiday[];
   holidayDates: Record<string, string>;
+  leaveDates?: Record<string, string>;
   approverName: string;
   historyAllocations: HistoryAllocation[];
   notifications?: any[];
@@ -295,6 +297,7 @@ export function EmployeeTabs({
             initialNotes={initialNotes}
             editable={editable}
             holidayDates={holidayDates}
+            leaveDates={leaveDates}
           />
         </CardContent>
       </Card>

@@ -242,7 +242,24 @@ export default async function EmployeeDashboard({
     }
   }
 
-  // (Leaves history handles by other team)
+  // Fetch approved leaves in this week
+  const leaves = await prisma.leave.findMany({
+    where: {
+      employeeId: user.id,
+      status: "APPROVED",
+      startDate: { lte: weekEnd },
+      endDate: { gte: weekStart },
+    },
+  });
+
+  const leaveDates: Record<string, string> = {};
+  for (const l of leaves) {
+    const start = new Date(Math.max(l.startDate.getTime(), weekStart.getTime()));
+    const end = new Date(Math.min(l.endDate.getTime(), weekEnd.getTime()));
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      leaveDates[toISODate(d)] = l.leaveType;
+    }
+  }
 
   // 5. Fetch all holidays list (default + assigned plan)
   const holidaysListRaw = await prisma.holiday.findMany({
@@ -388,6 +405,7 @@ export default async function EmployeeDashboard({
         feedbackAlert={feedbackAlert}
         holidaysList={holidaysList}
         holidayDates={holidayDates}
+        leaveDates={leaveDates}
         approverName={approverName}
         historyAllocations={historyAllocations}
         notifications={serializedNotifications}
