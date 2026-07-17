@@ -18,7 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { WEEKDAY_LABELS } from "@/lib/dates";
-import { approveTimesheet, rejectTimesheet } from "./actions";
+import { approveProjectApproval, rejectProjectApproval } from "./actions";
 
 export type ReviewLine = {
   taskId: string;
@@ -30,16 +30,18 @@ export type ReviewLine = {
 };
 
 export function ReviewDialog({
-  timesheetHeaderId,
+  approvalId,
   employeeName,
+  projectName,
   dates,
   lines,
   submitComments,
   open,
   onOpenChange,
 }: {
-  timesheetHeaderId: string;
+  approvalId: string;
   employeeName: string;
+  projectName: string;
   dates: string[];
   lines: ReviewLine[];
   submitComments: string;
@@ -74,7 +76,7 @@ export function ReviewDialog({
     setError(null);
     startTransition(async () => {
       try {
-        await approveTimesheet(timesheetHeaderId);
+        await approveProjectApproval(approvalId);
         onOpenChange(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to approve");
@@ -86,7 +88,7 @@ export function ReviewDialog({
     setError(null);
     startTransition(async () => {
       try {
-        await rejectTimesheet(timesheetHeaderId, rejectComments);
+        await rejectProjectApproval(approvalId, rejectComments);
         onOpenChange(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to reject");
@@ -98,7 +100,7 @@ export function ReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Review: {employeeName}</DialogTitle>
+          <DialogTitle>Review: {employeeName} — {projectName}</DialogTitle>
         </DialogHeader>
 
         <div className="overflow-x-auto">

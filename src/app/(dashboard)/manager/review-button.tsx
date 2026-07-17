@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button";
 import { ReviewDialog, type ReviewLine } from "./review-dialog";
 
 export function ReviewButton({
-  timesheetHeaderId,
+  approvalId,
   employeeName,
+  projectName,
   dates,
   lines,
   submitComments,
 }: {
-  timesheetHeaderId: string;
+  approvalId: string;
   employeeName: string;
+  projectName: string;
   dates: string[];
   lines: ReviewLine[];
   submitComments: string;
@@ -25,8 +27,9 @@ export function ReviewButton({
         Review
       </Button>
       <ReviewDialog
-        timesheetHeaderId={timesheetHeaderId}
+        approvalId={approvalId}
         employeeName={employeeName}
+        projectName={projectName}
         dates={dates}
         lines={lines}
         submitComments={submitComments}
