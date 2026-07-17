@@ -21,6 +21,7 @@ import { WeekDatePicker } from "@/components/week-date-picker";
 import { EmployeeTabs } from "./employee-tabs";
 import { allocationStatusFor } from "@/lib/allocation";
 import { computeProjectHistory } from "@/lib/project-history";
+import { resolveProjectApprover } from "@/lib/approval";
 
 const STATUS_VARIANT = {
   DRAFT: "secondary",
@@ -350,11 +351,45 @@ export default async function EmployeeDashboard({
     where: { id: user.id },
     select: {
       isActive: true,
+      approverOverrideId: true,
+      reportingManagerId: true,
       reportingManager: { select: { name: true } },
       approverOverride: { select: { name: true } },
     },
   });
-  const approverName = empDetails?.approverOverride?.name ?? empDetails?.reportingManager?.name ?? "HR Admin";
+
+  // Approval is per project now, so the "your approver" hint lists the resolved
+  // approver(s) across the projects this employee is currently allocated to.
+  const currentAllocProjects = await prisma.project.findMany({
+    where: {
+      isActive: true,
+      allocations: {
+        some: {
+          employeeId: user.id,
+          startDate: { lte: weekEnd },
+          OR: [{ endDate: null }, { endDate: { gte: weekStart } }],
+        },
+      },
+    },
+    select: { projectManagerId: true, client: { select: { clientManagerId: true } } },
+  });
+  const approverIds = new Set<string>();
+  for (const p of currentAllocProjects) {
+    const a = resolveProjectApprover({
+      employeeId: user.id,
+      approverOverrideId: empDetails?.approverOverrideId ?? null,
+      reportingManagerId: empDetails?.reportingManagerId ?? null,
+      projectManagerId: p.projectManagerId,
+      clientManagerId: p.client?.clientManagerId ?? null,
+    });
+    if (a) approverIds.add(a);
+  }
+  const approverEmps = approverIds.size > 0
+    ? await prisma.employee.findMany({ where: { id: { in: [...approverIds] } }, select: { name: true } })
+    : [];
+  const approverName = approverEmps.length > 0
+    ? approverEmps.map((e) => e.name).join(", ")
+    : (empDetails?.reportingManager?.name ?? "HR Admin");
 
   // Project History is derived from actual timesheet entries (contiguous stints),
   // not from ProjectAllocation rows -- those had unreliable historical dates from
