@@ -674,8 +674,9 @@ export function TimesheetGrid({
               <Select
                 value={selectedProjectName}
                 onValueChange={(val) => {
-                  setSelectedProjectName(val);
-                  const projectTasks = tasks.filter((t) => t.projectName === val && !activeTaskIds.includes(t.id));
+                  const v = val ?? "";
+                  setSelectedProjectName(v);
+                  const projectTasks = tasks.filter((t) => t.projectName === v && !activeTaskIds.includes(t.id));
                   setSelectedTaskId(projectTasks[0]?.id ?? "");
                 }}
               >
@@ -701,7 +702,7 @@ export function TimesheetGrid({
               <Label className="text-xs font-semibold text-gray-600">Select Task / Phase</Label>
               <Select
                 value={selectedTaskId}
-                onValueChange={(val) => setSelectedTaskId(val)}
+                onValueChange={(val) => setSelectedTaskId(val ?? "")}
                 disabled={!selectedProjectName}
               >
                 <SelectTrigger className="w-full">
