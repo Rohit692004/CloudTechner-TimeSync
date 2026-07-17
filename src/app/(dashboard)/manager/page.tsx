@@ -15,6 +15,7 @@ import { ReviewButton } from "./review-button";
 import type { ReviewLine } from "./review-dialog";
 import { ApprovalFilters } from "./approval-filters";
 import { SortHeader } from "./sort-header";
+import type { Prisma } from "@prisma/client";
 
 export default async function ManagerDashboard({
   searchParams,
@@ -28,62 +29,47 @@ export default async function ManagerDashboard({
   const user = await requireRole("EMPLOYEE", "PROJECT_MANAGER", "HR_ADMIN", "TS_ADMIN");
   const { sort, startDate, endDate } = await searchParams;
 
-  const whereClause: any = {
-    approvedById: user.id,
-    status: "SUBMITTED",
-    employee: { isActive: true },
-    OR: [
-      { isLate: false },
-      { isLate: true, lateApproved: true }
-    ]
-  };
-
+  // Pending approvals are now per-project slices assigned to this approver.
+  const headerWhere: Prisma.TimesheetHeaderWhereInput = { employee: { isActive: true } };
   if (startDate || endDate) {
-    whereClause.weekStartDate = {};
-    if (startDate) {
-      whereClause.weekStartDate.gte = new Date(`${startDate}T00:00:00.000Z`);
-    }
-    if (endDate) {
-      whereClause.weekStartDate.lte = new Date(`${endDate}T00:00:00.000Z`);
-    }
+    headerWhere.weekStartDate = {};
+    if (startDate) headerWhere.weekStartDate.gte = new Date(`${startDate}T00:00:00.000Z`);
+    if (endDate) headerWhere.weekStartDate.lte = new Date(`${endDate}T00:00:00.000Z`);
   }
 
-  let orderByClause: any = { submittedAt: "desc" }; // default to latest submitted
-  if (sort === "asc") {
-    orderByClause = { submittedAt: "asc" };
-  } else if (sort === "week_desc") {
-    orderByClause = { weekStartDate: "desc" };
-  } else if (sort === "week_asc") {
-    orderByClause = { weekStartDate: "asc" };
-  }
+  let orderByClause: Prisma.TimesheetApprovalOrderByWithRelationInput = { timesheetHeader: { submittedAt: "desc" } };
+  if (sort === "asc") orderByClause = { timesheetHeader: { submittedAt: "asc" } };
+  else if (sort === "week_desc") orderByClause = { timesheetHeader: { weekStartDate: "desc" } };
+  else if (sort === "week_asc") orderByClause = { timesheetHeader: { weekStartDate: "asc" } };
 
   const [pending, recentDecisions] = await Promise.all([
-    prisma.timesheetHeader.findMany({
-      where: whereClause,
+    prisma.timesheetApproval.findMany({
+      where: { approverId: user.id, status: "PENDING", timesheetHeader: headerWhere },
       include: {
-        employee: true,
-        lines: {
+        project: { select: { id: true, name: true } },
+        timesheetHeader: {
           include: {
-            task: { include: { project: { include: { client: true } } } },
+            employee: true,
+            lines: { include: { task: { include: { project: { include: { client: true } } } } } },
+            approvalHistory: { orderBy: { createdAt: "desc" }, take: 1 },
           },
         },
-        approvalHistory: { orderBy: { createdAt: "desc" }, take: 1 },
       },
       orderBy: orderByClause,
     }),
-    prisma.timesheetHeader.findMany({
-      where: { approvedById: user.id, status: { in: ["APPROVED", "REJECTED"] } },
-      include: { employee: true },
+    prisma.timesheetApproval.findMany({
+      where: { approverId: user.id, status: { in: ["APPROVED", "REJECTED"] } },
+      include: { project: { select: { name: true } }, timesheetHeader: { include: { employee: true } } },
       orderBy: { updatedAt: "desc" },
       take: 10,
-    })
+    }),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">Team Approvals</h1>
-        <p className="text-muted-foreground">Welcome, {user.name}.</p>
+        <p className="text-muted-foreground">Welcome, {user.name}. Each row is one project&apos;s hours awaiting your approval.</p>
       </div>
 
       <Card>
@@ -96,16 +82,20 @@ export default async function ManagerDashboard({
             <TableHeader>
               <TableRow>
                 <TableHead className="font-semibold text-gray-500">Employee</TableHead>
+                <TableHead className="font-semibold text-gray-500">Project</TableHead>
                 <TableHead className="font-semibold text-gray-500"><SortHeader /></TableHead>
-                <TableHead className="font-semibold text-gray-500">Total Hours</TableHead>
+                <TableHead className="font-semibold text-gray-500">Project Hours</TableHead>
                 <TableHead className="text-right font-semibold text-gray-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pending.map((t) => {
+              {pending.map((approval) => {
+                const t = approval.timesheetHeader;
                 const dates = weekDates(t.weekStartDate).map(toISODate);
+                // Only this project's lines -- the approver never sees other projects.
+                const projectLines = t.lines.filter((l) => l.task.project.id === approval.projectId);
                 const byTask = new Map<string, ReviewLine>();
-                for (const line of t.lines) {
+                for (const line of projectLines) {
                   const key = line.taskId;
                   if (!byTask.has(key)) {
                     byTask.set(key, {
@@ -120,21 +110,21 @@ export default async function ManagerDashboard({
                   byTask.get(key)!.hoursByDate[toISODate(line.workDate)] = Number(line.hours);
                   byTask.get(key)!.notesByDate[toISODate(line.workDate)] = line.notes ?? "";
                 }
+                const projectHours = projectLines.reduce((s, l) => s + Number(l.hours), 0);
                 return (
-                  <TableRow key={t.id}>
+                  <TableRow key={approval.id}>
                     <TableCell className="font-medium">{t.employee.name}</TableCell>
+                    <TableCell>{approval.project.name}</TableCell>
                     <TableCell>{toISODate(t.weekStartDate)}</TableCell>
-                    <TableCell>{t.totalHours?.toString() ?? "0"}</TableCell>
+                    <TableCell>{projectHours}</TableCell>
                     <TableCell className="text-right">
                       <ReviewButton
-                        timesheetHeaderId={t.id}
+                        approvalId={approval.id}
                         employeeName={t.employee.name}
+                        projectName={approval.project.name}
                         dates={dates}
                         lines={Array.from(byTask.values()).sort(
-                          (a, b) =>
-                            a.clientName.localeCompare(b.clientName) ||
-                            a.projectName.localeCompare(b.projectName) ||
-                            a.taskName.localeCompare(b.taskName)
+                          (a, b) => a.taskName.localeCompare(b.taskName)
                         )}
                         submitComments={t.approvalHistory[0]?.comments ?? ""}
                       />
@@ -144,7 +134,7 @@ export default async function ManagerDashboard({
               })}
               {pending.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
                     Nothing pending review.
                   </TableCell>
                 </TableRow>
@@ -163,25 +153,27 @@ export default async function ManagerDashboard({
             <TableHeader>
               <TableRow>
                 <TableHead>Employee</TableHead>
+                <TableHead>Project</TableHead>
                 <TableHead>Week</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {recentDecisions.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell>{t.employee.name}</TableCell>
-                  <TableCell>{toISODate(t.weekStartDate)}</TableCell>
+              {recentDecisions.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell>{d.timesheetHeader.employee.name}</TableCell>
+                  <TableCell>{d.project.name}</TableCell>
+                  <TableCell>{toISODate(d.timesheetHeader.weekStartDate)}</TableCell>
                   <TableCell>
-                    <Badge variant={t.status === "APPROVED" ? "default" : "destructive"}>
-                      {t.status}
+                    <Badge variant={d.status === "APPROVED" ? "default" : "destructive"}>
+                      {d.status}
                     </Badge>
                   </TableCell>
                 </TableRow>
               ))}
               {recentDecisions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="text-center text-muted-foreground">
                     No decisions yet.
                   </TableCell>
                 </TableRow>

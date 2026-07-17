@@ -62,6 +62,7 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  timesheetApprovals TimesheetApproval[] @relation("TimesheetApprover")
   allocations        ProjectAllocation[] @relation("EmployeeAllocations")
   createdAllocations ProjectAllocation[] @relation("AllocationCreatedBy")
   timesheets         TimesheetHeader[]   @relation("EmployeeTimesheets")
@@ -131,6 +132,7 @@ model Project {
   tasks              Task[]
   allocations        ProjectAllocation[]
   allocationRequests AllocationRequest[]
+  timesheetApprovals TimesheetApproval[]
 }
 
 model Task {
@@ -182,10 +184,41 @@ model TimesheetHeader {
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
-  lines           TimesheetLine[]
-  approvalHistory ApprovalHistory[]
+  lines            TimesheetLine[]
+  approvalHistory  ApprovalHistory[]
+  projectApprovals TimesheetApproval[]
 
   @@unique([employeeId, weekStartDate])
+}
+
+enum TimesheetApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Per-project approval slice of a submitted week. A timesheet that spans several
+// projects is approved project-by-project: each project's hours + comments go to
+// that project's own approver (resolved at submit time), and each approver sees
+// ONLY their project's slice. The parent TimesheetHeader.status is a rollup of
+// these. Rows only exist for weeks submitted under the per-project flow --
+// historical/imported timesheets are never backfilled or touched.
+model TimesheetApproval {
+  id                String                  @id @default(uuid())
+  timesheetHeaderId String
+  timesheetHeader   TimesheetHeader         @relation(fields: [timesheetHeaderId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project                 @relation(fields: [projectId], references: [id])
+  approverId        String
+  approver          Employee                @relation("TimesheetApprover", fields: [approverId], references: [id])
+  status            TimesheetApprovalStatus @default(PENDING)
+  comments          String?
+  approvedAt        DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+
+  @@unique([timesheetHeaderId, projectId])
+  @@index([approverId, status])
 }
 
 model TimesheetLine {

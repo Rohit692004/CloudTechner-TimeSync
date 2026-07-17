@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-guards";
 import { addDays, mondayOf, toISODate } from "@/lib/dates";
+import { resolveProjectApprover } from "@/lib/approval";
 
 function parseLines(formData: FormData) {
   const lines: { taskId: string; workDate: string; hours: number; notes: string }[] = [];
@@ -80,6 +81,7 @@ async function upsertTimesheet(
   }
 
   let approvedById: string | null = existing?.approvedById ?? null;
+  let projectApprovals: { projectId: string; approverId: string }[] = [];
 
   if (targetStatus === "SUBMITTED") {
     // ── Enforce 40 Hour Submission Rule & Friday Timing Check ──
@@ -143,13 +145,19 @@ async function upsertTimesheet(
       throw new Error("You can only submit this timesheet starting from Friday of this timesheet week. Please save it as a draft for now.");
     }
 
-    // Fetch comments criteria for the tasks being submitted
+    // Fetch comments criteria + project/approver info for the tasks being submitted
     const taskIdsForValidation = lines.map((l) => l.taskId);
     const tasksWithCriteria = await prisma.task.findMany({
       where: { id: { in: taskIdsForValidation } },
       include: {
         project: {
-          select: { commentsCriteria: true },
+          select: {
+            id: true,
+            name: true,
+            commentsCriteria: true,
+            projectManagerId: true,
+            client: { select: { clientManagerId: true } },
+          },
         },
       },
     });
@@ -157,6 +165,8 @@ async function upsertTimesheet(
     const criteriaMap = new Map(
       tasksWithCriteria.map((t) => [t.id, t.project.commentsCriteria])
     );
+    // task -> its project (for splitting the week's approval per project)
+    const taskProject = new Map(tasksWithCriteria.map((t) => [t.id, t.project]));
 
     // Validate notes against the criteria
     for (const line of lines) {
@@ -179,35 +189,41 @@ async function upsertTimesheet(
       }
     }
 
-    const employee = await prisma.employee.findUniqueOrThrow({ where: { id: employeeId } });
-    
-    // If project manager is working on their own project, approval goes to client manager.
-    let clientManagerIdForPM: string | null = null;
-    const taskIds = lines.map((l) => l.taskId);
-    if (taskIds.length > 0) {
-      const projectsWithManager = await prisma.project.findMany({
-        where: {
-          tasks: { some: { id: { in: taskIds } } },
-        },
-        include: { client: true },
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { id: employeeId },
+      select: { approverOverrideId: true, reportingManagerId: true },
+    });
+
+    // Per-project approval: split the week by project and resolve an approver for
+    // each, so each project's hours + comments go to that project's own approver
+    // (see src/lib/approval.ts). Every distinct project must resolve to a valid
+    // approver or the whole submission is blocked.
+    const distinctProjects = new Map<string, { name: string; approverId: string }>();
+    for (const line of lines) {
+      const proj = taskProject.get(line.taskId);
+      if (!proj) continue;
+      if (distinctProjects.has(proj.id)) continue;
+      const approverId = resolveProjectApprover({
+        employeeId,
+        approverOverrideId: employee.approverOverrideId,
+        reportingManagerId: employee.reportingManagerId,
+        projectManagerId: proj.projectManagerId,
+        clientManagerId: proj.client?.clientManagerId ?? null,
       });
-
-      for (const proj of projectsWithManager) {
-        if (proj.projectManagerId === employeeId && proj.client?.clientManagerId) {
-          clientManagerIdForPM = proj.client.clientManagerId;
-          break;
-        }
+      if (!approverId) {
+        throw new Error(`No approver is configured for project "${proj.name}". Contact Timesheet Admin.`);
       }
+      distinctProjects.set(proj.id, { name: proj.name, approverId });
     }
 
-    approvedById = clientManagerIdForPM ?? employee.approverOverrideId ?? employee.reportingManagerId;
+    if (distinctProjects.size === 0) {
+      throw new Error("No approver is configured for this timesheet. Contact Timesheet Admin.");
+    }
 
-    if (!approvedById) {
-      throw new Error("No approver is configured for this employee. Contact Timesheet Admin.");
-    }
-    if (approvedById === employeeId) {
-      throw new Error("Resolved approver can't be yourself. Contact Timesheet Admin.");
-    }
+    projectApprovals = [...distinctProjects.entries()].map(([projectId, v]) => ({ projectId, approverId: v.approverId }));
+    // With per-project approval the single header-level approver is no longer the
+    // source of truth; the per-project TimesheetApproval rows are.
+    approvedById = null;
   }
 
   const currentWeekMonday = mondayOf(new Date());
@@ -251,6 +267,20 @@ async function upsertTimesheet(
           workDate: new Date(`${l.workDate}T00:00:00.000Z`),
           hours: l.hours,
           notes: l.notes || null,
+        })),
+      });
+    }
+
+    // Per-project approval rows. Rebuilt on every submit/resubmit (a resubmit
+    // after rejection resets all slices back to PENDING). Drafts clear them.
+    await tx.timesheetApproval.deleteMany({ where: { timesheetHeaderId: header.id } });
+    if (targetStatus === "SUBMITTED" && projectApprovals.length > 0) {
+      await tx.timesheetApproval.createMany({
+        data: projectApprovals.map((pa) => ({
+          timesheetHeaderId: header.id,
+          projectId: pa.projectId,
+          approverId: pa.approverId,
+          status: "PENDING" as const,
         })),
       });
     }
