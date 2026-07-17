@@ -13,23 +13,53 @@ import {
 } from "@/components/ui/table";
 import { ReviewButton } from "./review-button";
 import type { ReviewLine } from "./review-dialog";
+import { ApprovalFilters } from "./approval-filters";
+import { SortHeader } from "./sort-header";
 
-export default async function ManagerDashboard() {
+export default async function ManagerDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    sort?: string;
+    startDate?: string;
+    endDate?: string;
+  }>;
+}) {
   const user = await requireRole("EMPLOYEE", "PROJECT_MANAGER", "HR_ADMIN", "TS_ADMIN");
+  const { sort, startDate, endDate } = await searchParams;
+
+  const whereClause: any = {
+    approvedById: user.id,
+    status: "SUBMITTED",
+    employee: { isActive: true },
+    OR: [
+      { isLate: false },
+      { isLate: true, lateApproved: true }
+    ]
+  };
+
+  if (startDate || endDate) {
+    whereClause.weekStartDate = {};
+    if (startDate) {
+      whereClause.weekStartDate.gte = new Date(`${startDate}T00:00:00.000Z`);
+    }
+    if (endDate) {
+      whereClause.weekStartDate.lte = new Date(`${endDate}T00:00:00.000Z`);
+    }
+  }
+
+  let orderByClause: any = { submittedAt: "desc" }; // default to latest submitted
+  if (sort === "asc") {
+    orderByClause = { submittedAt: "asc" };
+  } else if (sort === "week_desc") {
+    orderByClause = { weekStartDate: "desc" };
+  } else if (sort === "week_asc") {
+    orderByClause = { weekStartDate: "asc" };
+  }
 
   const [pending, recentDecisions] = await Promise.all([
     prisma.timesheetHeader.findMany({
-      where: {
-        approvedById: user.id,
-        status: "SUBMITTED",
-        // Don't surface pending requests from employees who have since been
-        // relieved/deactivated -- they've left, so there's nothing to action.
-        employee: { isActive: true },
-        OR: [
-          { isLate: false },
-          { isLate: true, lateApproved: true }
-        ]
-      },
+      where: whereClause,
       include: {
         employee: true,
         lines: {
@@ -39,7 +69,7 @@ export default async function ManagerDashboard() {
         },
         approvalHistory: { orderBy: { createdAt: "desc" }, take: 1 },
       },
-      orderBy: { submittedAt: "asc" },
+      orderBy: orderByClause,
     }),
     prisma.timesheetHeader.findMany({
       where: { approvedById: user.id, status: { in: ["APPROVED", "REJECTED"] } },
@@ -57,17 +87,18 @@ export default async function ManagerDashboard() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Pending review ({pending.length})</CardTitle>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-3">
+          <CardTitle className="text-base font-bold text-gray-800">Pending review ({pending.length})</CardTitle>
+          <ApprovalFilters />
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Employee</TableHead>
-                <TableHead>Week</TableHead>
-                <TableHead>Total Hours</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="font-semibold text-gray-500">Employee</TableHead>
+                <TableHead className="font-semibold text-gray-500"><SortHeader /></TableHead>
+                <TableHead className="font-semibold text-gray-500">Total Hours</TableHead>
+                <TableHead className="text-right font-semibold text-gray-500">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -58,3 +58,33 @@ export async function rejectLateSubmission(timesheetHeaderId: string, comments: 
   revalidatePath("/hr");
   revalidatePath("/employee");
 }
+
+export async function sendTimesheetReminder(employeeId: string, weekStartISO: string) {
+  const user = await requireRole("HR_ADMIN");
+
+  const employee = await prisma.employee.findUniqueOrThrow({
+    where: { id: employeeId },
+    select: { name: true, reportingManagerId: true },
+  });
+
+  // 1. Notify employee
+  await prisma.notification.create({
+    data: {
+      employeeId,
+      message: "Hr asked to fill the timesheet",
+    },
+  });
+
+  // 2. Notify reporting manager
+  if (employee.reportingManagerId) {
+    await prisma.notification.create({
+      data: {
+        employeeId: employee.reportingManagerId,
+        message: `${employee.name} did not fill the timesheet of previous week.`,
+      },
+    });
+  }
+
+  revalidatePath("/hr");
+  revalidatePath("/employee");
+}

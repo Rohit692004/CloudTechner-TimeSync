@@ -14,6 +14,8 @@ import { TimesheetGrid } from "./timesheet-grid";
 import { Calendar, Clock, Award, LineChart } from "lucide-react";
 import Link from "next/link";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { dismissNotification } from "./actions";
+import { useTransition } from "react";
 
 type Holiday = {
   id: string;
@@ -91,6 +93,7 @@ export function EmployeeTabs({
   historyAllocations: HistoryAllocation[];
   notifications?: any[];
 }) {
+  const [isPending, startTransition] = useTransition();
   return (
     <Tabs defaultValue="timesheet" className="w-full flex flex-col gap-6">
       <div className="flex items-center justify-between border-b border-gray-150 pb-2">
@@ -136,7 +139,7 @@ export function EmployeeTabs({
           {notifications.map((notif) => (
             <div
               key={notif.id}
-              className="flex items-start justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-emerald-900 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300"
+              className="flex items-start justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-lg text-emerald-900 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 gap-4"
             >
               <div className="flex items-start gap-3">
                 <div className="bg-emerald-100 text-emerald-800 p-1.5 rounded-full mt-0.5">
@@ -145,12 +148,36 @@ export function EmployeeTabs({
                   </svg>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-semibold text-xs">{notif.message}</span>
-                  <span className="text-[10px] text-emerald-600/70 font-mono">
+                  <span className="font-semibold text-xs text-left">{notif.message}</span>
+                  <span className="text-[10px] text-emerald-600/70 font-mono text-left">
                     {new Date(notif.createdAt).toLocaleDateString()}
                   </span>
                 </div>
               </div>
+
+              {/* Dismiss Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  startTransition(async () => {
+                    await dismissNotification(notif.id);
+                  });
+                }}
+                disabled={isPending}
+                className="text-emerald-750/60 hover:text-emerald-900 transition-colors p-1 rounded-md hover:bg-emerald-100/50"
+                title="Dismiss notification"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-4 h-4"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           ))}
         </div>

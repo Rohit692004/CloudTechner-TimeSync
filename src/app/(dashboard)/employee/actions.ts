@@ -325,5 +325,17 @@ export async function withdrawTimesheet(weekStartISO: string) {
   revalidatePath("/employee");
 }
 
+export async function dismissNotification(notificationId: string) {
+  const user = await requireRole("EMPLOYEE", "PROJECT_MANAGER", "HR_ADMIN", "TS_ADMIN");
+
+  await prisma.notification.update({
+    where: { id: notificationId, employeeId: user.id },
+    data: { isRead: true },
+  });
+
+  revalidatePath("/employee");
+  revalidatePath("/manager");
+}
+
 
 

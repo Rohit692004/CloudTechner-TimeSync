@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LateSubmissionsCard } from "./late-submissions-card";
+import { NotifyButton } from "./notify-button";
 
 import {
   Table,
@@ -92,13 +93,18 @@ export default async function HrDashboard({
   const prevWeek = toISODate(addDays(weekStart, -7));
   const nextWeek = toISODate(addDays(weekStart, 7));
 
-  const [loggers, weekHeaders, lateSubmissions] = await Promise.all([
+  const prevWeekStart = addDays(weekStart, -7);
+
+  const [loggers, weekHeaders, prevWeekHeaders, lateSubmissions] = await Promise.all([
     prisma.employee.findMany({
       where: { isActive: true, role: { in: ["EMPLOYEE", "PROJECT_MANAGER"] } },
       orderBy: { name: "asc" },
     }),
     prisma.timesheetHeader.findMany({
       where: { weekStartDate: weekStart },
+    }),
+    prisma.timesheetHeader.findMany({
+      where: { weekStartDate: prevWeekStart },
     }),
     prisma.timesheetHeader.findMany({
       where: {
@@ -115,6 +121,7 @@ export default async function HrDashboard({
     }),
   ]);
   const headerByEmployee = new Map(weekHeaders.map((h) => [h.employeeId, h]));
+  const prevHeaderByEmployee = new Map(prevWeekHeaders.map((h) => [h.employeeId, h]));
 
   const serializedLateSubmissions = lateSubmissions.map((item) => ({
     id: item.id,
@@ -132,10 +139,15 @@ export default async function HrDashboard({
 
   const rows = loggers.map((e) => {
     const header = headerByEmployee.get(e.id);
+    const prevHeader = prevHeaderByEmployee.get(e.id);
+    const prevStatus = prevHeader?.status ?? "NOT_STARTED";
+    const prevWeekSubmitted = prevStatus === "SUBMITTED" || prevStatus === "APPROVED";
     return {
       employee: e,
       status: (header?.status ?? "NOT_STARTED") as Status,
       totalHours: header?.totalHours?.toString() ?? "—",
+      prevWeekSubmitted,
+      prevWeekISO: toISODate(prevWeekStart),
     };
   });
 
@@ -240,53 +252,61 @@ export default async function HrDashboard({
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-gray-50/45">
-              <TableRow className="border-b border-gray-100 hover:bg-transparent">
-                <TableHead className="w-[45%] pl-6 font-semibold text-gray-500">Employee</TableHead>
-                <TableHead className="w-[20%] font-semibold text-gray-500">System Role</TableHead>
-                <TableHead className="w-[15%] font-semibold text-gray-500 text-center">Total Hours</TableHead>
-                <TableHead className="w-[20%] pr-6 font-semibold text-gray-500 text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((row) => {
-                const config = STATUS_CONFIG[row.status];
-                const initials = row.employee.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-                return (
-                  <TableRow key={row.employee.id} className="border-b border-gray-50 hover:bg-gray-50/30 transition-colors">
-                    <TableCell className="pl-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-700">
-                          {initials}
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-gray-800">{row.employee.name}</span>
-                          <span className="text-[10px] text-gray-400">{row.employee.id}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-3.5">
-                      <span className="text-sm text-gray-600 font-medium">
-                        {row.employee.role === "PROJECT_MANAGER" ? "Project Manager" : "Employee"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="py-3.5 text-center font-bold text-gray-700">
-                      {row.totalHours}
-                    </TableCell>
-                    <TableCell className="pr-6 py-3.5 text-right">
-                      <Badge variant={config.badgeVariant} className="px-2.5 py-0.5 rounded-full font-semibold text-xs shadow-sm">
-                        {config.label}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-sm text-gray-400 font-medium">
-                    No active employees registered.
-                  </TableCell>
-                </TableRow>
-              )}
+               <TableRow className="border-b border-gray-100 hover:bg-transparent">
+                 <TableHead className="w-[35%] pl-6 font-semibold text-gray-500">Employee</TableHead>
+                 <TableHead className="w-[20%] font-semibold text-gray-500">System Role</TableHead>
+                 <TableHead className="w-[15%] font-semibold text-gray-500 text-center">Total Hours</TableHead>
+                 <TableHead className="w-[15%] font-semibold text-gray-500 text-center">Status</TableHead>
+                 <TableHead className="w-[15%] pr-6 font-semibold text-gray-500 text-right">Action</TableHead>
+               </TableRow>
+             </TableHeader>
+             <TableBody>
+               {rows.map((row) => {
+                 const config = STATUS_CONFIG[row.status];
+                 const initials = row.employee.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+                 return (
+                   <TableRow key={row.employee.id} className="border-b border-gray-50 hover:bg-gray-50/30 transition-colors">
+                     <TableCell className="pl-6 py-3.5">
+                       <div className="flex items-center gap-3">
+                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-700">
+                           {initials}
+                         </div>
+                         <div className="flex flex-col">
+                           <span className="font-semibold text-gray-800">{row.employee.name}</span>
+                           <span className="text-[10px] text-gray-400">{row.employee.id}</span>
+                         </div>
+                       </div>
+                     </TableCell>
+                     <TableCell className="py-3.5">
+                       <span className="text-sm text-gray-600 font-medium">
+                         {row.employee.role === "PROJECT_MANAGER" ? "Project Manager" : "Employee"}
+                       </span>
+                     </TableCell>
+                     <TableCell className="py-3.5 text-center font-bold text-gray-700">
+                       {row.totalHours}
+                     </TableCell>
+                     <TableCell className="py-3.5 text-center">
+                       <Badge variant={config.badgeVariant} className="px-2.5 py-0.5 rounded-full font-semibold text-xs shadow-sm">
+                         {config.label}
+                       </Badge>
+                     </TableCell>
+                     <TableCell className="pr-6 py-3.5 text-right">
+                       {!row.prevWeekSubmitted && (
+                         <div className="flex justify-end">
+                           <NotifyButton employeeId={row.employee.id} weekStartISO={row.prevWeekISO} />
+                         </div>
+                       )}
+                     </TableCell>
+                   </TableRow>
+                 );
+               })}
+               {rows.length === 0 && (
+                 <TableRow>
+                   <TableCell colSpan={5} className="text-center py-8 text-sm text-gray-400 font-medium">
+                     No active employees registered.
+                   </TableCell>
+                 </TableRow>
+               )}
             </TableBody>
           </Table>
         </CardContent>
