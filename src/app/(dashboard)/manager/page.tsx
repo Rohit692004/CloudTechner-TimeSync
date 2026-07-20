@@ -36,6 +36,7 @@ export default async function ManagerDashboard({
       isActive: true,
       ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
     },
+    OR: [{ isLate: false }, { isLate: true, lateApproved: true }],
   };
 
   if (startDate || endDate) {
