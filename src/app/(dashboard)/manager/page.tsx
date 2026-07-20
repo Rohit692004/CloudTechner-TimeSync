@@ -11,10 +11,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ReviewButton } from "./review-button";
 import type { ReviewLine } from "./review-dialog";
 import { ApprovalFilters } from "./approval-filters";
-import { SortHeader } from "./sort-header";
 import { GroupedApprovalsTable, type ApprovalRowData } from "./grouped-approvals-table";
 import type { Prisma } from "@prisma/client";
 
@@ -37,6 +35,7 @@ export default async function ManagerDashboard({
       isActive: true,
       ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
     },
+    OR: [{ isLate: false }, { isLate: true, lateApproved: true }],
   };
 
   if (startDate || endDate) {

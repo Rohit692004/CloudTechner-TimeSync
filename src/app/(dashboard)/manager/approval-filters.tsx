@@ -12,60 +12,63 @@ export function ApprovalFilters() {
   const endDate = searchParams.get("endDate") || "";
   const search = searchParams.get("search") || "";
 
-  const [searchVal, setSearchVal] = React.useState(search);
+  const searchDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync state if search param changes from outside (e.g. clear filters)
   React.useEffect(() => {
-    setSearchVal(search);
-  }, [search]);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
 
-  const updateFilters = (updates: { sort?: string; startDate?: string; endDate?: string; search?: string }) => {
-    const params = new URLSearchParams(searchParams.toString());
-    
-    if (updates.sort !== undefined) {
-      if (updates.sort) {
-        params.set("sort", updates.sort);
-      } else {
-        params.delete("sort");
-      }
-    }
-    
-    if (updates.startDate !== undefined) {
-      if (updates.startDate) {
-        params.set("startDate", updates.startDate);
-      } else {
-        params.delete("startDate");
-      }
-    }
-    
-    if (updates.endDate !== undefined) {
-      if (updates.endDate) {
-        params.set("endDate", updates.endDate);
-      } else {
-        params.delete("endDate");
-      }
-    }
+  const updateFilters = React.useCallback(
+    (updates: { sort?: string; startDate?: string; endDate?: string; search?: string }) => {
+      const params = new URLSearchParams(searchParams.toString());
 
-    if (updates.search !== undefined) {
-      if (updates.search) {
-        params.set("search", updates.search);
-      } else {
-        params.delete("search");
+      if (updates.sort !== undefined) {
+        if (updates.sort) {
+          params.set("sort", updates.sort);
+        } else {
+          params.delete("sort");
+        }
       }
-    }
 
-    router.push(`/manager?${params.toString()}`);
-  };
-
-  // Debounce search update to avoid constant reload while typing
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchVal !== search) {
-        updateFilters({ search: searchVal });
+      if (updates.startDate !== undefined) {
+        if (updates.startDate) {
+          params.set("startDate", updates.startDate);
+        } else {
+          params.delete("startDate");
+        }
       }
+
+      if (updates.endDate !== undefined) {
+        if (updates.endDate) {
+          params.set("endDate", updates.endDate);
+        } else {
+          params.delete("endDate");
+        }
+      }
+
+      if (updates.search !== undefined) {
+        const nextSearch = updates.search.trim();
+        if (nextSearch) {
+          params.set("search", nextSearch);
+        } else {
+          params.delete("search");
+        }
+      }
+
+      const qs = params.toString();
+      router.push(qs ? `/manager?${qs}` : "/manager");
+    },
+    [router, searchParams]
+  );
+
+  function handleSearchChange(value: string) {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      updateFilters({ search: value });
     }, 300);
-    return () => clearTimeout(timer);
-  }, [searchVal]);
+  }
 
   const handleReset = () => {
     router.push("/manager");
@@ -83,9 +86,10 @@ export function ApprovalFilters() {
           </svg>
         </span>
         <input
+          key={search}
           type="text"
-          value={searchVal}
-          onChange={(e) => setSearchVal(e.target.value)}
+          defaultValue={search}
+          onChange={(e) => handleSearchChange(e.target.value)}
           placeholder="Search employee..."
           className="w-full rounded-md border border-gray-200 bg-white py-1.5 pl-8 pr-2.5 text-xs text-gray-700 placeholder-gray-400 focus:border-emerald-500 focus:outline-none transition-all"
         />
@@ -121,7 +125,7 @@ export function ApprovalFilters() {
           <button
             type="button"
             onClick={handleReset}
-            className="text-red-650 hover:text-red-700 transition-colors px-2 py-1 hover:bg-red-50 rounded-md font-medium whitespace-nowrap"
+            className="text-red-600 hover:text-red-700 transition-colors px-2 py-1 hover:bg-red-50 rounded-md font-medium whitespace-nowrap"
           >
             Clear Filters
           </button>

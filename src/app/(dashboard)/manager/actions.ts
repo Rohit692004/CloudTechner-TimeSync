@@ -33,10 +33,15 @@ export async function approveProjectApproval(approvalId: string) {
 
   const approval = await prisma.timesheetApproval.findUniqueOrThrow({
     where: { id: approvalId },
-    include: { timesheetHeader: { select: { id: true, employeeId: true } } },
+    include: {
+      timesheetHeader: { select: { id: true, employeeId: true, isLate: true, lateApproved: true } },
+    },
   });
   if (approval.approverId !== manager.id) throw new Error("You are not the assigned approver for this project.");
   if (approval.timesheetHeader.employeeId === manager.id) throw new Error("You can't approve your own timesheet.");
+  if (approval.timesheetHeader.isLate && !approval.timesheetHeader.lateApproved) {
+    throw new Error("This late submission must be approved by HR before manager review.");
+  }
   if (approval.status !== "PENDING") throw new Error(`This project slice is already ${approval.status.toLowerCase()}.`);
 
   await prisma.$transaction(async (tx) => {
@@ -62,9 +67,15 @@ export async function rejectProjectApproval(approvalId: string, comments: string
 
   const approval = await prisma.timesheetApproval.findUniqueOrThrow({
     where: { id: approvalId },
-    include: { timesheetHeader: { select: { id: true, employeeId: true } } },
+    include: {
+      timesheetHeader: { select: { id: true, employeeId: true, isLate: true, lateApproved: true } },
+    },
   });
   if (approval.approverId !== manager.id) throw new Error("You are not the assigned approver for this project.");
+  if (approval.timesheetHeader.employeeId === manager.id) throw new Error("You can't reject your own timesheet.");
+  if (approval.timesheetHeader.isLate && !approval.timesheetHeader.lateApproved) {
+    throw new Error("This late submission must be approved by HR before manager review.");
+  }
   if (approval.status !== "PENDING") throw new Error(`This project slice is already ${approval.status.toLowerCase()}.`);
 
   await prisma.$transaction(async (tx) => {

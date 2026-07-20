@@ -44,7 +44,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
       where: {
         approverId: userId,
         status: "PENDING",
-        timesheetHeader: { employee: { isActive: true } },
+        timesheetHeader: {
+          employee: { isActive: true },
+          OR: [{ isLate: false }, { isLate: true, lateApproved: true }],
+        },
       },
     }),
   ]);
