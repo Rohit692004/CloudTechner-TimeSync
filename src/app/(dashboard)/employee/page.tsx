@@ -110,13 +110,6 @@ export default async function EmployeeDashboard({
       });
     }
   }
-  const tasks = Array.from(taskMap.values()).sort(
-    (a, b) =>
-      a.clientName.localeCompare(b.clientName) ||
-      a.projectName.localeCompare(b.projectName) ||
-      a.name.localeCompare(b.name)
-  );
-
   const header = await prisma.timesheetHeader.findUnique({
     where: { employeeId_weekStartDate: { employeeId: user.id, weekStartDate: weekStart } },
     include: {
@@ -125,6 +118,42 @@ export default async function EmployeeDashboard({
       approvalHistory: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
+
+  // Ensure historical/imported timesheets with saved lines render even if the project is no longer in active allocations for that week
+  if (header?.lines.length) {
+    const lineTaskIds = header.lines.map((l) => l.taskId);
+    const missingTaskIds = lineTaskIds.filter((id) => !taskMap.has(id));
+    if (missingTaskIds.length > 0) {
+      const extraTasks = await prisma.task.findMany({
+        where: { id: { in: missingTaskIds } },
+        include: {
+          project: {
+            include: {
+              client: { select: { id: true, name: true } },
+            },
+          },
+        },
+      });
+      for (const t of extraTasks) {
+        taskMap.set(t.id, {
+          id: t.id,
+          name: t.name,
+          projectName: t.project.name,
+          clientName: t.project.client.name,
+          allocationStartDate: "",
+          allocationEndDate: null,
+          commentsCriteria: t.project.commentsCriteria,
+        });
+      }
+    }
+  }
+
+  const tasks = Array.from(taskMap.values()).sort(
+    (a, b) =>
+      a.clientName.localeCompare(b.clientName) ||
+      a.projectName.localeCompare(b.projectName) ||
+      a.name.localeCompare(b.name)
+  );
 
   const initialHours: Record<string, number> = {};
   const initialNotes: Record<string, string> = {};
