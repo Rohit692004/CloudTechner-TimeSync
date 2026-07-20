@@ -24,13 +24,20 @@ export default async function ManagerDashboard({
     sort?: string;
     startDate?: string;
     endDate?: string;
+    search?: string;
   }>;
 }) {
   const user = await requireRole("EMPLOYEE", "PROJECT_MANAGER", "HR_ADMIN", "TS_ADMIN");
-  const { sort, startDate, endDate } = await searchParams;
+  const { sort, startDate, endDate, search } = await searchParams;
 
   // Pending approvals are now per-project slices assigned to this approver.
-  const headerWhere: Prisma.TimesheetHeaderWhereInput = { employee: { isActive: true } };
+  const headerWhere: Prisma.TimesheetHeaderWhereInput = {
+    employee: {
+      isActive: true,
+      ...(search ? { name: { contains: search, mode: "insensitive" } } : {}),
+    },
+  };
+
   if (startDate || endDate) {
     headerWhere.weekStartDate = {};
     if (startDate) headerWhere.weekStartDate.gte = new Date(`${startDate}T00:00:00.000Z`);
