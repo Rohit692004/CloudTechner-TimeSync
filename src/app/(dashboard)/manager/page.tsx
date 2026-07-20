@@ -15,6 +15,7 @@ import { ReviewButton } from "./review-button";
 import type { ReviewLine } from "./review-dialog";
 import { ApprovalFilters } from "./approval-filters";
 import { SortHeader } from "./sort-header";
+import { GroupedApprovalsTable, type ApprovalRowData } from "./grouped-approvals-table";
 import type { Prisma } from "@prisma/client";
 
 export default async function ManagerDashboard({
@@ -73,11 +74,47 @@ export default async function ManagerDashboard({
     }),
   ]);
 
+  const approvalsData: ApprovalRowData[] = pending.map((approval) => {
+    const t = approval.timesheetHeader;
+    const dates = weekDates(t.weekStartDate).map(toISODate);
+    const projectLines = t.lines.filter((l) => l.task.project.id === approval.projectId);
+    const byTask = new Map<string, ReviewLine>();
+    for (const line of projectLines) {
+      const key = line.taskId;
+      if (!byTask.has(key)) {
+        byTask.set(key, {
+          taskId: line.taskId,
+          taskName: line.task.name,
+          projectName: line.task.project.name,
+          clientName: line.task.project.client.name,
+          hoursByDate: {},
+          notesByDate: {},
+        });
+      }
+      byTask.get(key)!.hoursByDate[toISODate(line.workDate)] = Number(line.hours);
+      byTask.get(key)!.notesByDate[toISODate(line.workDate)] = line.notes ?? "";
+    }
+    const projectHours = projectLines.reduce((s, l) => s + Number(l.hours), 0);
+
+    return {
+      approvalId: approval.id,
+      employeeId: t.employee.id,
+      employeeName: t.employee.name,
+      projectId: approval.projectId,
+      projectName: approval.project.name,
+      weekStartDate: toISODate(t.weekStartDate),
+      projectHours,
+      dates,
+      lines: Array.from(byTask.values()).sort((a, b) => a.taskName.localeCompare(b.taskName)),
+      submitComments: t.approvalHistory[0]?.comments ?? "",
+    };
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">Team Approvals</h1>
-        <p className="text-muted-foreground">Welcome, {user.name}. Each row is one project&apos;s hours awaiting your approval.</p>
+        <p className="text-muted-foreground">Welcome, {user.name}. Click on an employee name to expand their pending timesheet approvals.</p>
       </div>
 
       <Card>
@@ -85,70 +122,8 @@ export default async function ManagerDashboard({
           <CardTitle className="text-base font-bold text-gray-800">Pending review ({pending.length})</CardTitle>
           <ApprovalFilters />
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-semibold text-gray-500">Employee</TableHead>
-                <TableHead className="font-semibold text-gray-500">Project</TableHead>
-                <TableHead className="font-semibold text-gray-500"><SortHeader /></TableHead>
-                <TableHead className="font-semibold text-gray-500">Project Hours</TableHead>
-                <TableHead className="text-right font-semibold text-gray-500">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pending.map((approval) => {
-                const t = approval.timesheetHeader;
-                const dates = weekDates(t.weekStartDate).map(toISODate);
-                // Only this project's lines -- the approver never sees other projects.
-                const projectLines = t.lines.filter((l) => l.task.project.id === approval.projectId);
-                const byTask = new Map<string, ReviewLine>();
-                for (const line of projectLines) {
-                  const key = line.taskId;
-                  if (!byTask.has(key)) {
-                    byTask.set(key, {
-                      taskId: line.taskId,
-                      taskName: line.task.name,
-                      projectName: line.task.project.name,
-                      clientName: line.task.project.client.name,
-                      hoursByDate: {},
-                      notesByDate: {},
-                    });
-                  }
-                  byTask.get(key)!.hoursByDate[toISODate(line.workDate)] = Number(line.hours);
-                  byTask.get(key)!.notesByDate[toISODate(line.workDate)] = line.notes ?? "";
-                }
-                const projectHours = projectLines.reduce((s, l) => s + Number(l.hours), 0);
-                return (
-                  <TableRow key={approval.id}>
-                    <TableCell className="font-medium">{t.employee.name}</TableCell>
-                    <TableCell>{approval.project.name}</TableCell>
-                    <TableCell>{toISODate(t.weekStartDate)}</TableCell>
-                    <TableCell>{projectHours}</TableCell>
-                    <TableCell className="text-right">
-                      <ReviewButton
-                        approvalId={approval.id}
-                        employeeName={t.employee.name}
-                        projectName={approval.project.name}
-                        dates={dates}
-                        lines={Array.from(byTask.values()).sort(
-                          (a, b) => a.taskName.localeCompare(b.taskName)
-                        )}
-                        submitComments={t.approvalHistory[0]?.comments ?? ""}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {pending.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground">
-                    Nothing pending review.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-0 sm:p-6">
+          <GroupedApprovalsTable approvals={approvalsData} />
         </CardContent>
       </Card>
 
