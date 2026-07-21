@@ -18,3 +18,7 @@ export async function loginAction(formData: FormData) {
     throw error;
   }
 }
+
+export async function azureLoginAction() {
+  await signIn("azure-ad", { redirectTo: "/" });
+}
