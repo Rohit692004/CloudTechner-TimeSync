@@ -317,6 +317,7 @@ export function EmployeeTabs({
       <Card className="border-gray-100 shadow-sm bg-white">
         <CardContent className="pt-6">
           <TimesheetGrid
+            key={weekStartISO}
             weekStartISO={weekStartISO}
             dates={dates}
             tasks={tasks}

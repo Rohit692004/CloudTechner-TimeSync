@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,9 +36,9 @@ type Task = {
   name: string;
   projectName: string;
   clientName: string;
-  allocationStartDate?: string;
-  allocationEndDate?: string | null;
-  commentsCriteria?: string;
+  allocationStartDate: string;
+  allocationEndDate: string | null;
+  commentsCriteria: "COMPULSORY" | "OPTIONAL" | "LESS_THAN_8_HOURS" | "MORE_THAN_8_HOURS";
 };
 
 export function TimesheetGrid({
@@ -76,6 +76,18 @@ export function TimesheetGrid({
     }
     return Array.from(ids);
   });
+
+  // Re-sync local grid state whenever weekStartISO, initialHours, or initialNotes change
+  useEffect(() => {
+    setHours(initialHours);
+    setNotes(initialNotes);
+    const ids = new Set<string>();
+    for (const key of Object.keys(initialHours)) {
+      const [taskId] = key.split("__");
+      ids.add(taskId);
+    }
+    setActiveTaskIds(Array.from(ids));
+  }, [weekStartISO, initialHours, initialNotes]);
 
   // 2. Dialog state for adding a project/task row
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
@@ -424,8 +436,11 @@ export function TimesheetGrid({
                             const todayStr = new Date().toLocaleDateString('sv-SE');
                             const isFutureDay = date > todayStr;
                             
-                            const isNotAllocated = !!((task.allocationStartDate && date < task.allocationStartDate) ||
-                                                   (task.allocationEndDate && date > task.allocationEndDate));
+                            const hasLoggedHours = (hours[key] ?? 0) > 0;
+                            const isNotAllocated = editable &&
+                                                   !hasLoggedHours &&
+                                                   !!((task.allocationStartDate && date < task.allocationStartDate) ||
+                                                      (task.allocationEndDate && date > task.allocationEndDate));
 
                             const isDisabled = !editable || !!leaveType || !!holidayName || isWeeklyOff || isFutureDay || isNotAllocated;
 
