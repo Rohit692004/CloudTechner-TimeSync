@@ -16,6 +16,24 @@ export async function approveLateSubmission(timesheetHeaderId: string) {
       },
     });
 
+    const projectApprovals = await tx.timesheetApproval.findMany({
+      where: { timesheetHeaderId: timesheet.id },
+      select: { status: true },
+    });
+    const allProjectSlicesApproved =
+      projectApprovals.length > 0 &&
+      projectApprovals.every((approval) => approval.status === "APPROVED");
+
+    if (allProjectSlicesApproved) {
+      await tx.timesheetHeader.update({
+        where: { id: timesheet.id },
+        data: {
+          status: "APPROVED",
+          approvedAt: new Date(),
+        },
+      });
+    }
+
     // 2. Add history log
     await tx.approvalHistory.create({
       data: {

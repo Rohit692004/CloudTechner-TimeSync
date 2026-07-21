@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-guards";
 import { addDays, mondayOf, toISODate } from "@/lib/dates";
-import { resolveProjectApprover } from "@/lib/approval";
+import { isSelfManagedInternalApproval, resolveProjectApprover } from "@/lib/approval";
 
 function parseLines(formData: FormData) {
   const lines: { taskId: string; workDate: string; hours: number; notes: string }[] = [];
@@ -81,7 +81,7 @@ async function upsertTimesheet(
   }
 
   let approvedById: string | null = existing?.approvedById ?? null;
-  let projectApprovals: { projectId: string; approverId: string }[] = [];
+  let projectApprovals: { projectId: string; approverId: string; status: "PENDING" | "APPROVED" }[] = [];
 
   if (targetStatus === "SUBMITTED") {
     // ── Enforce 40 Hour Submission Rule & Friday Timing Check ──
@@ -198,7 +198,7 @@ async function upsertTimesheet(
     // each, so each project's hours + comments go to that project's own approver
     // (see src/lib/approval.ts). Every distinct project must resolve to a valid
     // approver or the whole submission is blocked.
-    const distinctProjects = new Map<string, { name: string; approverId: string }>();
+    const distinctProjects = new Map<string, { name: string; approverId: string; status: "PENDING" | "APPROVED" }>();
     for (const line of lines) {
       const proj = taskProject.get(line.taskId);
       if (!proj) continue;
@@ -211,16 +211,24 @@ async function upsertTimesheet(
         clientManagerId: proj.client?.clientManagerId ?? null,
       });
       if (!approverId) {
+        if (isSelfManagedInternalApproval({ employeeId, projectName: proj.name, projectManagerId: proj.projectManagerId })) {
+          distinctProjects.set(proj.id, { name: proj.name, approverId: employeeId, status: "APPROVED" });
+          continue;
+        }
         throw new Error(`No approver is configured for project "${proj.name}". Contact Timesheet Admin.`);
       }
-      distinctProjects.set(proj.id, { name: proj.name, approverId });
+      distinctProjects.set(proj.id, { name: proj.name, approverId, status: "PENDING" });
     }
 
     if (distinctProjects.size === 0) {
       throw new Error("No approver is configured for this timesheet. Contact Timesheet Admin.");
     }
 
-    projectApprovals = [...distinctProjects.entries()].map(([projectId, v]) => ({ projectId, approverId: v.approverId }));
+    projectApprovals = [...distinctProjects.entries()].map(([projectId, v]) => ({
+      projectId,
+      approverId: v.approverId,
+      status: v.status,
+    }));
     // With per-project approval the single header-level approver is no longer the
     // source of truth; the per-project TimesheetApproval rows are.
     approvedById = null;
@@ -232,6 +240,11 @@ async function upsertTimesheet(
   const isOverdue = diffDays > 14;
 
   const totalHours = lines.reduce((s, l) => s + l.hours, 0);
+  const autoApprovedSubmission =
+    targetStatus === "SUBMITTED" &&
+    projectApprovals.length > 0 &&
+    projectApprovals.every((pa) => pa.status === "APPROVED");
+  const headerStatus = autoApprovedSubmission && !isOverdue ? "APPROVED" : targetStatus;
 
   await prisma.$transaction(async (tx) => {
     const header = await tx.timesheetHeader.upsert({
@@ -239,22 +252,24 @@ async function upsertTimesheet(
       create: {
         employeeId,
         weekStartDate,
-        status: targetStatus,
+        status: headerStatus,
         rejectionComments: null,
         totalHours,
         isLate: targetStatus === "SUBMITTED" ? isOverdue : false,
         lateApproved: false,
         approvedById: targetStatus === "SUBMITTED" ? approvedById : null,
         submittedAt: targetStatus === "SUBMITTED" ? new Date() : null,
+        approvedAt: headerStatus === "APPROVED" ? new Date() : null,
       },
       update: {
-        status: targetStatus,
+        status: headerStatus,
         rejectionComments: targetStatus === "SUBMITTED" ? null : undefined,
         totalHours,
         isLate: targetStatus === "SUBMITTED" ? isOverdue : undefined,
         lateApproved: targetStatus === "SUBMITTED" && isOverdue ? false : undefined,
         approvedById: targetStatus === "SUBMITTED" ? approvedById : undefined,
         submittedAt: targetStatus === "SUBMITTED" ? new Date() : undefined,
+        approvedAt: targetStatus === "SUBMITTED" ? (headerStatus === "APPROVED" ? new Date() : null) : undefined,
       },
     });
 
@@ -280,7 +295,8 @@ async function upsertTimesheet(
           timesheetHeaderId: header.id,
           projectId: pa.projectId,
           approverId: pa.approverId,
-          status: "PENDING" as const,
+          status: pa.status,
+          approvedAt: pa.status === "APPROVED" ? new Date() : null,
         })),
       });
     }
@@ -292,10 +308,10 @@ async function upsertTimesheet(
           actorId: employeeId,
           action: isOverdue 
             ? "SUBMITTED_LATE" 
-            : (existing?.status === "REJECTED" ? "RESUBMITTED" : "SUBMITTED"),
+            : (autoApprovedSubmission ? "APPROVED" : (existing?.status === "REJECTED" ? "RESUBMITTED" : "SUBMITTED")),
           comments: isOverdue 
             ? "Late submission requested (Pending HR approval)" 
-            : (existing?.status === "REJECTED" ? "Resubmitted timesheet" : "Submitted timesheet"),
+            : (autoApprovedSubmission ? "Self-managed internal project auto-approved" : (existing?.status === "REJECTED" ? "Resubmitted timesheet" : "Submitted timesheet")),
         },
       });
     } else if (targetStatus === "DRAFT") {
