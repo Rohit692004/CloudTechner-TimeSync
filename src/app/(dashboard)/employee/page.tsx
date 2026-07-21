@@ -21,7 +21,7 @@ import { WeekDatePicker } from "@/components/week-date-picker";
 import { EmployeeTabs } from "./employee-tabs";
 import { allocationStatusFor } from "@/lib/allocation";
 import { computeProjectHistory } from "@/lib/project-history";
-import { resolveProjectApprover } from "@/lib/approval";
+import { isSelfManagedInternalApproval, resolveProjectApprover } from "@/lib/approval";
 
 const STATUS_VARIANT = {
   DRAFT: "secondary",
@@ -400,9 +400,10 @@ export default async function EmployeeDashboard({
         },
       },
     },
-    select: { projectManagerId: true, client: { select: { clientManagerId: true } } },
+    select: { name: true, projectManagerId: true, client: { select: { clientManagerId: true } } },
   });
   const approverIds = new Set<string>();
+  const approverLabels = new Set<string>();
   for (const p of currentAllocProjects) {
     const a = resolveProjectApprover({
       employeeId: user.id,
@@ -412,13 +413,17 @@ export default async function EmployeeDashboard({
       clientManagerId: p.client?.clientManagerId ?? null,
     });
     if (a) approverIds.add(a);
+    else if (isSelfManagedInternalApproval({ employeeId: user.id, projectName: p.name, projectManagerId: p.projectManagerId })) {
+      approverLabels.add("Self-managed internal project");
+    }
   }
   const approverEmps = approverIds.size > 0
     ? await prisma.employee.findMany({ where: { id: { in: [...approverIds] } }, select: { name: true } })
     : [];
+  for (const approver of approverEmps) approverLabels.add(approver.name);
   const approverName = approverEmps.length > 0
-    ? approverEmps.map((e) => e.name).join(", ")
-    : (empDetails?.reportingManager?.name ?? "HR Admin");
+    ? [...approverLabels].join(", ")
+    : (approverLabels.size > 0 ? [...approverLabels].join(", ") : "No approver configured");
 
   // Project History is derived from actual timesheet entries (contiguous stints),
   // not from ProjectAllocation rows -- those had unreliable historical dates from

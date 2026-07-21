@@ -23,3 +23,20 @@ export function resolveProjectApprover(params: {
   if (notSelf(reportingManagerId)) return reportingManagerId;
   return null;
 }
+
+const SELF_MANAGED_INTERNAL_APPROVAL = {
+  employeeId: "CT002",
+  projectName: "CT IND Internal",
+} as const;
+
+export function isSelfManagedInternalApproval(params: {
+  employeeId: string;
+  projectName: string;
+  projectManagerId: string | null;
+}): boolean {
+  return (
+    params.employeeId === SELF_MANAGED_INTERNAL_APPROVAL.employeeId &&
+    params.projectName === SELF_MANAGED_INTERNAL_APPROVAL.projectName &&
+    params.projectManagerId === params.employeeId
+  );
+}
