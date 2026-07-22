@@ -7,6 +7,10 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const errorMessage =
+    error === "not-authorized"
+      ? "Your Microsoft account is not mapped to an active employee. Please contact your admin."
+      : "Microsoft sign-in could not be completed. Please try again or contact your admin.";
   const azureAvailable =
     !!process.env.AZURE_AD_CLIENT_ID &&
     !!process.env.AZURE_AD_CLIENT_SECRET &&
@@ -90,7 +94,7 @@ export default async function LoginPage({
 
           {error && (
             <p className="mb-4 text-sm text-red-600">
-              Microsoft sign-in could not be completed. Please try again or contact your admin.
+              {errorMessage}
             </p>
           )}
 

@@ -9,6 +9,8 @@ const azureClientId = process.env.AZURE_AD_CLIENT_ID;
 const azureClientSecret = process.env.AZURE_AD_CLIENT_SECRET;
 const azureTenantId = process.env.AZURE_AD_TENANT_ID;
 const azureEnabled = !!azureClientId && !!azureClientSecret && !!azureTenantId;
+const credentialsEnabled = process.env.ENABLE_CREDENTIALS_LOGIN !== "false";
+const allowedEmailDomain = (process.env.SSO_ALLOWED_EMAIL_DOMAIN ?? "@cloudtechner.com").toLowerCase();
 
 async function findActiveEmployeeByEmail(email: string) {
   return prisma.employee.findFirst({
@@ -21,7 +23,13 @@ async function findActiveEmployeeByEmail(email: string) {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 8 * 60 * 60,
+  },
+  jwt: {
+    maxAge: 8 * 60 * 60,
+  },
   pages: { signIn: "/login" },
   providers: [
     ...(azureEnabled
@@ -33,30 +41,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]
       : []),
-    Credentials({
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      authorize: async (credentials) => {
-        const email = credentials?.email as string | undefined;
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
+    ...(credentialsEnabled
+      ? [
+          Credentials({
+            credentials: {
+              email: { label: "Email", type: "email" },
+              password: { label: "Password", type: "password" },
+            },
+            authorize: async (credentials) => {
+              const email = credentials?.email as string | undefined;
+              const password = credentials?.password as string | undefined;
+              if (!email || !password) return null;
 
-        const employee = await findActiveEmployeeByEmail(email);
-        if (!employee) return null;
+              const employee = await findActiveEmployeeByEmail(email);
+              if (!employee) return null;
 
-        const valid = await bcrypt.compare(password, employee.passwordHash);
-        if (!valid) return null;
+              const valid = await bcrypt.compare(password, employee.passwordHash);
+              if (!valid) return null;
 
-        return {
-          id: employee.id,
-          name: employee.name,
-          email: employee.email,
-          role: employee.role,
-        };
-      },
-    }),
+              return {
+                id: employee.id,
+                name: employee.name,
+                email: employee.email,
+                role: employee.role,
+              };
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     signIn: async ({ user, account, profile }) => {
@@ -66,15 +78,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         user.email ??
         (profile as { email?: string; preferred_username?: string } | undefined)?.email ??
         (profile as { email?: string; preferred_username?: string } | undefined)?.preferred_username;
-      if (!profileEmail) return false;
+      if (!profileEmail) {
+        console.warn("SSO denied: Azure profile did not include an email.");
+        return "/login?error=not-authorized";
+      }
 
-      const employee = await findActiveEmployeeByEmail(profileEmail);
-      if (!employee) return false;
+      const normalizedEmail = profileEmail.toLowerCase();
+      if (!normalizedEmail.endsWith(allowedEmailDomain)) {
+        console.warn("SSO denied: email domain is not allowed.", { email: normalizedEmail });
+        return "/login?error=not-authorized";
+      }
+
+      const employee = await findActiveEmployeeByEmail(normalizedEmail);
+      if (!employee) {
+        console.warn("SSO denied: employee is not active or mapped.", { email: normalizedEmail });
+        return "/login?error=not-authorized";
+      }
 
       user.id = employee.id;
       user.name = employee.name;
       user.email = employee.email;
       user.role = employee.role;
+      console.info("SSO success.", { employeeId: employee.id, email: employee.email });
       return true;
     },
     jwt: ({ token, user }) => {
