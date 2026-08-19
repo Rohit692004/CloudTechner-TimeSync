@@ -61,6 +61,7 @@ model Employee {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  authSessionVersion Int @default(0)
 
   timesheetApprovals TimesheetApproval[] @relation("TimesheetApprover")
   allocations        ProjectAllocation[] @relation("EmployeeAllocations")
@@ -375,4 +376,20 @@ model Notification {
   createdAt  DateTime @default(now())
 
   @@index([employeeId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actorName String?
+  action    String
+  entity    String
+  entityId  String?
+  summary   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }

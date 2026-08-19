@@ -4,24 +4,23 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth-guards";
 import { getMaxOverlapPercentage, isValidAllocationPercentage } from "@/lib/allocation";
+import { parseISODateValue, validateRecordId } from "@/lib/validation";
+import { writeAuditLog } from "@/lib/audit";
 
 function parseDate(value: FormDataEntryValue | null): Date | null {
   const str = String(value ?? "").trim();
-  if (!str) return null;
-  return new Date(`${str}T00:00:00.000Z`);
+  return parseISODateValue(str || null, "Date");
 }
 
 export async function createAllocation(formData: FormData) {
   const admin = await requireRole("TS_ADMIN");
 
-  const employeeId = String(formData.get("employeeId") ?? "");
-  const projectId = String(formData.get("projectId") ?? "");
+  const employeeId = validateRecordId(String(formData.get("employeeId") ?? ""), "Employee");
+  const projectId = validateRecordId(String(formData.get("projectId") ?? ""), "Project");
   const percentage = Number(formData.get("percentage"));
   const startDate = parseDate(formData.get("startDate"));
   const endDate = parseDate(formData.get("endDate"));
 
-  if (!employeeId) throw new Error("Employee is required");
-  if (!projectId) throw new Error("Project is required");
   if (!startDate) throw new Error("Start date is required");
   if (endDate && endDate < startDate) throw new Error("End date can't be before start date");
   if (!isValidAllocationPercentage(percentage)) {
@@ -37,7 +36,7 @@ export async function createAllocation(formData: FormData) {
   //   );
   // }
 
-  await prisma.projectAllocation.create({
+  const allocation = await prisma.projectAllocation.create({
     data: {
       employeeId,
       projectId,
@@ -47,15 +46,23 @@ export async function createAllocation(formData: FormData) {
       createdById: admin.id,
     },
   });
+  await writeAuditLog({
+    actor: admin,
+    action: "ALLOCATION_CREATED",
+    entity: "ProjectAllocation",
+    entityId: allocation.id,
+    summary: `${admin.name ?? admin.id} allocated employee ${employeeId} to project ${projectId}.`,
+    metadata: { employeeId, projectId, percentage, startDate: startDate.toISOString(), endDate: endDate?.toISOString() ?? null },
+  });
 
   revalidatePath("/admin/allocations");
   revalidatePath(`/admin/projects/${projectId}`);
 }
 
 export async function endAllocationToday(id: string) {
-  await requireRole("TS_ADMIN");
+  const actor = await requireRole("TS_ADMIN");
   const allocation = await prisma.projectAllocation.findUnique({
-    where: { id },
+    where: { id: validateRecordId(id, "Allocation") },
   });
   if (!allocation) throw new Error("Allocation not found");
 
@@ -67,25 +74,36 @@ export async function endAllocationToday(id: string) {
   const newEndDate = yesterday >= allocation.startDate ? yesterday : allocation.startDate;
 
   await prisma.projectAllocation.update({
-    where: { id },
+    where: { id: allocation.id },
     data: { endDate: newEndDate },
+  });
+  await writeAuditLog({
+    actor,
+    action: "ALLOCATION_ENDED",
+    entity: "ProjectAllocation",
+    entityId: allocation.id,
+    summary: `${actor.name ?? actor.id} ended allocation ${allocation.id}.`,
+    metadata: { oldEndDate: allocation.endDate?.toISOString() ?? null, newEndDate: newEndDate.toISOString() },
   });
   revalidatePath("/admin/allocations");
   revalidatePath(`/admin/projects/${allocation.projectId}`);
 }
 
 export async function updateAllocationDates(id: string, startDateStr: string, endDateStr: string | null) {
-  await requireRole("TS_ADMIN");
+  const actor = await requireRole("TS_ADMIN");
+  const allocationId = validateRecordId(id, "Allocation");
 
   if (!startDateStr) throw new Error("Start date is required");
-  const startDate = new Date(`${startDateStr}T00:00:00.000Z`);
-  const endDate = endDateStr ? new Date(`${endDateStr}T00:00:00.000Z`) : null;
+  const startDate = parseISODateValue(startDateStr, "Start date");
+  const endDate = parseISODateValue(endDateStr, "End date");
+  if (!startDate) throw new Error("Start date is required");
   if (endDate && endDate < startDate) throw new Error("End date can't be before start date");
 
+  const existing = await prisma.projectAllocation.findUniqueOrThrow({ where: { id: allocationId } });
   let updated;
   try {
     updated = await prisma.projectAllocation.update({
-      where: { id },
+      where: { id: allocationId },
       data: { startDate, endDate },
     });
   } catch (e: unknown) {
@@ -94,14 +112,35 @@ export async function updateAllocationDates(id: string, startDateStr: string, en
     }
     throw e;
   }
+  await writeAuditLog({
+    actor,
+    action: "ALLOCATION_DATES_UPDATED",
+    entity: "ProjectAllocation",
+    entityId: allocationId,
+    summary: `${actor.name ?? actor.id} updated allocation dates ${allocationId}.`,
+    metadata: {
+      oldStartDate: existing.startDate.toISOString(),
+      oldEndDate: existing.endDate?.toISOString() ?? null,
+      newStartDate: startDate.toISOString(),
+      newEndDate: endDate?.toISOString() ?? null,
+    },
+  });
 
   revalidatePath("/admin/allocations");
   revalidatePath(`/admin/projects/${updated.projectId}`);
 }
 
 export async function deleteAllocation(id: string) {
-  await requireRole("TS_ADMIN");
-  const allocation = await prisma.projectAllocation.delete({ where: { id } });
+  const actor = await requireRole("TS_ADMIN");
+  const allocation = await prisma.projectAllocation.delete({ where: { id: validateRecordId(id, "Allocation") } });
+  await writeAuditLog({
+    actor,
+    action: "ALLOCATION_DELETED",
+    entity: "ProjectAllocation",
+    entityId: allocation.id,
+    summary: `${actor.name ?? actor.id} deleted allocation ${allocation.id}.`,
+    metadata: { employeeId: allocation.employeeId, projectId: allocation.projectId },
+  });
   revalidatePath("/admin/allocations");
   revalidatePath(`/admin/projects/${allocation.projectId}`);
 }
@@ -114,23 +153,25 @@ export async function createBulkAllocations(
 ) {
   const admin = await requireRole("TS_ADMIN");
 
-  if (!projectId) throw new Error("Project is required");
+  const safeProjectId = validateRecordId(projectId, "Project");
   if (!startDateStr) throw new Error("Start date is required");
 
-  const startDate = new Date(`${startDateStr}T00:00:00.000Z`);
-  const endDate = endDateStr ? new Date(`${endDateStr}T00:00:00.000Z`) : null;
+  const startDate = parseISODateValue(startDateStr, "Start date");
+  const endDate = parseISODateValue(endDateStr, "End date");
+  if (!startDate) throw new Error("Start date is required");
 
   if (endDate && endDate < startDate) throw new Error("End date can't be before start date");
 
   await prisma.$transaction(
     allocations.map((a) => {
+      const safeEmployeeId = validateRecordId(a.employeeId, "Employee");
       if (!isValidAllocationPercentage(a.percentage)) {
         throw new Error(`Allocation percentage must be between 5% and 100% (in 5% steps).`);
       }
       return prisma.projectAllocation.create({
         data: {
-          employeeId: a.employeeId,
-          projectId,
+          employeeId: safeEmployeeId,
+          projectId: safeProjectId,
           allocationPercentage: a.percentage,
           startDate,
           endDate,
@@ -139,7 +180,15 @@ export async function createBulkAllocations(
       });
     })
   );
+  await writeAuditLog({
+    actor: admin,
+    action: "BULK_ALLOCATIONS_CREATED",
+    entity: "Project",
+    entityId: safeProjectId,
+    summary: `${admin.name ?? admin.id} created ${allocations.length} allocations for project ${safeProjectId}.`,
+    metadata: { allocationCount: allocations.length, startDate: startDate.toISOString(), endDate: endDate?.toISOString() ?? null },
+  });
 
   revalidatePath("/admin/allocations");
-  revalidatePath(`/admin/projects/${projectId}`);
+  revalidatePath(`/admin/projects/${safeProjectId}`);
 }
